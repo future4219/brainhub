@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"brainhub/api/api/middleware"
 	"brainhub/api/api/schema"
 	"brainhub/domain/constructor"
 	"brainhub/usecase/input_port"
@@ -25,8 +26,12 @@ func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pages, err := h.useCase.List(r.Context(), sourceID)
-	if errors.Is(err, input_port.ErrSourceNotFound) {
+	viewerID := ""
+	if auth, ok := middleware.Current(r); ok {
+		viewerID = auth.User.ID
+	}
+	pages, err := h.useCase.List(r.Context(), sourceID, viewerID)
+	if errors.Is(err, input_port.ErrBrainNotFound) {
 		http.Error(w, "brain not found", http.StatusNotFound)
 		return
 	}

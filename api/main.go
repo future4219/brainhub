@@ -28,14 +28,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	brainUseCase, err := interactor.NewBrainUseCase(client)
-	if err != nil {
-		log.Fatal(err)
-	}
-	pageUseCase, err := interactor.NewPageUseCase(client, client, configuration.PublicPageTypes)
-	if err != nil {
-		log.Fatal(err)
-	}
 	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL)
 	if err != nil {
 		log.Fatal(err)
@@ -49,6 +41,18 @@ func main() {
 	clock := clock.Clock{}
 	ids := ulid.Generator{}
 	repositories := repository.New(pool, clock, ids)
+	shimClient, err := gbrain.NewShimClient(configuration.ShimURL, configuration.ShimToken)
+	if err != nil {
+		log.Fatal(err)
+	}
+	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, clock, ids)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pageUseCase, err := interactor.NewPageUseCase(client, repositories, repositories, configuration.PublicPageTypes)
+	if err != nil {
+		log.Fatal(err)
+	}
 	hasher, err := authentication.NewBcrypt(12)
 	if err != nil {
 		log.Fatal("initialize password hasher")

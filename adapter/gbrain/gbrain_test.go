@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"brainhub/domain/entity"
 )
 
 func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
@@ -42,7 +44,7 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 		switch r.URL.Path {
 		case "/.well-known/oauth-authorization-server":
 			atomic.AddInt32(&discoveryRequests, 1)
-			_ = json.NewEncoder(w).Encode(map[string]string{"token_endpoint": upstream.URL + "/token"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"token_endpoint": "https://public.example/token"})
 		case "/token":
 			if err := r.ParseForm(); err != nil {
 				t.Errorf("parse token form: %v", err)
@@ -72,25 +74,6 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Errorf("decode MCP request: %v", err)
 				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			if request.Params.Name == "sources_list" {
-				if len(request.Params.Arguments) != 0 {
-					t.Errorf("sources_list arguments = %v; want none", request.Params.Arguments)
-				}
-				sourceJSON, _ := json.Marshal(map[string]any{"sources": []map[string]any{
-					{"id": "default", "name": "default", "local_path": nil, "remote_url": nil, "federated": true, "page_count": 0, "last_sync_at": nil},
-					{"id": "brainhub", "name": "brainhub", "local_path": "/brain", "remote_url": nil, "federated": true, "page_count": 140, "last_sync_at": "2026-08-15T00:00:00Z"},
-				}})
-				envelope, _ := json.Marshal(map[string]any{
-					"jsonrpc": "2.0",
-					"id":      1,
-					"result": map[string]any{
-						"content": []map[string]string{{"type": "text", "text": string(sourceJSON)}},
-					},
-				})
-				w.Header().Set("Content-Type", "text/event-stream")
-				_, _ = fmt.Fprintf(w, "event: message\ndata: %s\n\n", envelope)
 				return
 			}
 			if request.Params.Name != "list_pages" {
@@ -149,13 +132,6 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	if len(pages) != 139 {
 		t.Fatalf("pages = %d; want 139", len(pages))
 	}
-	sources, err := repository.ListSources(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(sources) != 2 || sources[1].ID != "brainhub" || sources[1].PageCount != 140 {
-		t.Fatalf("sources = %+v", sources)
-	}
 	if got := atomic.LoadInt32(&discoveryRequests); got != 1 {
 		t.Errorf("discovery requests = %d; want 1", got)
 	}
@@ -167,6 +143,57 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	offsetsMu.Unlock()
 	if want := []int{0, 100, 100}; !reflect.DeepEqual(gotOffsets, want) {
 		t.Errorf("offsets = %v; want %v", gotOffsets, want)
+	}
+}
+
+func TestClientChecksSourceExistence(t *testing.T) {
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/oauth-authorization-server":
+			_ = json.NewEncoder(w).Encode(map[string]string{"token_endpoint": upstream.URL + "/token"})
+		case "/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token", "expires_in": 3600})
+		case "/mcp":
+			var request struct {
+				Params struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments"`
+				} `json:"params"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode request: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if request.Params.Name != "sources_list" || len(request.Params.Arguments) != 0 {
+				t.Errorf("tool/arguments = %q %v", request.Params.Name, request.Params.Arguments)
+			}
+			text, _ := json.Marshal(map[string]any{"sources": []map[string]string{{"id": "brainhub"}, {"id": "empty"}}})
+			envelope, _ := json.Marshal(map[string]any{
+				"jsonrpc": "2.0", "id": 1,
+				"result": map[string]any{"content": []map[string]string{{"type": "text", "text": string(text)}}},
+			})
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprintf(w, "event: message\ndata: %s\n\n", envelope)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	client, err := NewClient(upstream.URL, "client-id", "client-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		sourceID entity.SourceID
+		want     bool
+	}{{"brainhub", true}, {"missing", false}, {"empty", true}} {
+		got, err := client.Exists(context.Background(), test.sourceID)
+		if err != nil || got != test.want {
+			t.Fatalf("Exists(%q) = %v, %v; want %v", test.sourceID, got, err, test.want)
+		}
 	}
 }
 

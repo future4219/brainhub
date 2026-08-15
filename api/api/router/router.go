@@ -16,8 +16,11 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 
 	mux.HandleFunc("GET /healthz", handler.Health)
 	mux.HandleFunc("GET /api/config", handler.Config(publicMCPURL))
-	mux.HandleFunc("GET /api/brains", brainHandler.List)
-	mux.HandleFunc("GET /api/brains/{sourceID}/pages", pageHandler.List)
+	mux.Handle("GET /api/brains", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.List)))
+	mux.Handle("POST /api/brains", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Create)))
+	mux.Handle("POST /api/brains/{sourceID}/adopt", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Adopt)))
+	mux.Handle("GET /api/brains/{sourceID}", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.Get)))
+	mux.Handle("GET /api/brains/{sourceID}/pages", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.List)))
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 	mux.Handle("POST /api/auth/logout", middleware.RequireSession(authUseCase, http.HandlerFunc(authHandler.Logout)))
@@ -25,6 +28,10 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	mux.Handle("/mcp", gbrainProxy)
 	mux.Handle("/mcp/", gbrainProxy)
 	mux.Handle("/.well-known/", gbrainProxy)
+	mux.Handle("/authorize", gbrainProxy)
+	mux.Handle("/token", gbrainProxy)
+	mux.Handle("/revoke", gbrainProxy)
+	mux.Handle("/register", gbrainProxy)
 
 	return mux
 }

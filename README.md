@@ -51,26 +51,26 @@ GBrain のテーブルに `users` は存在しない。認証の単位は「ク�
 ## アーキテクチャ
 
 ```
-Codex / Claude / ChatGPT
-        │  MCP
-        ▼
-   brainhub（プロキシ・公開ページ・招待）   ← 未実装
-        │
-┌───────┼──────────────────────────┐
-│  Docker                           │
-│  Postgres ── gbrain serve ── autopilot │
-└───────┼──────────────────────────┘
-        │  write-through
-        ▼
-   brains/<source>/*.md（正本・git）
-        │  自動 push
-        ▼
-      GitHub
+Browser ── web（静的配信・/apiプロキシ）
+                    │
+Codex / Claude ── brainhub（API・MCPプロキシ）
+                    │ Docker内部ネットワーク
+        ┌───────────┼───────────┐
+        │           │           │
+     Postgres    gbrain       source作成shim
+                    │
+                autopilot
+                    │ write-through
+                    ▼
+          brains/<source>/*.md（正本・git）
+                    │ 自動 push
+                    ▼
+                  GitHub
 ```
 
 - Docker の中身は使い捨て。何度でも作り直せる。
 - 正本と DB のデータはホスト側（`~/dev/brainhub-data/`）にあり、コンテナが消えても残る。
-- 正本への書き込み経路は GBrain のみ。brainhub は正本をマウントしない。
+- 通常の正本への書き込み経路は GBrain のみ。source作成時だけ、シムが空のgitリポジトリとREADMEを初期化する。brainhub APIは正本をマウントしない。
 
 ## テナント分離
 
@@ -102,9 +102,13 @@ runtime 分離が必要になるのは、他者のデータを同一 DB に置�
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GBRAIN_POSTGRES_PASSWORD=
-BRAINHUB_DATABASE_URL=postgresql://brainhub:<password>@localhost:55433/brainhub
+BRAINHUB_DATABASE_URL=postgresql://brainhub:<password>@postgres:5432/brainhub
 BRAINHUB_GBRAIN_CLIENT_ID=
 BRAINHUB_GBRAIN_CLIENT_SECRET=
+SHIM_TOKEN=
+# 公開先を変える場合は2つを同じoriginに揃える
+GBRAIN_PUBLIC_URL=http://localhost:8080
+PUBLIC_MCP_URL=http://localhost:8080/mcp
 ```
 
 データ用のホストディレクトリを作る。
@@ -118,6 +122,12 @@ mkdir -p ~/dev/brainhub-data/{pgdata,gbrain-home,brains}
 ```bash
 docker compose up -d
 ```
+
+ブラウザは `http://localhost:3000`、brainhub APIとMCPは `http://localhost:8080` で待ち受ける。ホストへ公開するのはこの2サービスだけで、Postgres、GBrain、source作成シムはDocker内部ネットワークからのみ到達できる。
+
+brainhub APIは起動時に未適用のマイグレーションを適用する。将来brainhubを複数インスタンスにする場合は、migrationを起動から分離して独立ジョブにする。
+
+source作成シムは共有する `SHIM_TOKEN` を要求する。子プロセスには `PATH` / `HOME` / `USER` / `LANG` / `TZ` だけを渡し、実行記録は `/var/lib/gbrain-home/.gbrain/audit/source-shim.jsonl` に追記する。
 
 ### 初回のみ
 
@@ -166,7 +176,7 @@ docker compose exec gbrain gbrain sources harden brainhub --pat-file /var/lib/gb
 
 ```bash
 docker compose exec gbrain gbrain auth create "codex"
-codex mcp add gbrain --url http://localhost:3131/mcp --bearer-token-env-var GBRAIN_TOKEN
+codex mcp add gbrain --url http://localhost:8080/mcp --bearer-token-env-var GBRAIN_TOKEN
 ```
 
 `list_skills` が件数を返せば、スキル（知識の引き方）も配信されている。
@@ -184,15 +194,44 @@ GRANT CONNECT ON DATABASE gbrain TO gbrain;
 REVOKE ALL PRIVILEGES ON DATABASE gbrain FROM brainhub;
 ```
 
-マイグレーションとAPIをホスト上で実行する。
+APIコンテナはGBrainへ `http://gbrain:3131`、シムへ `http://shim:8081`、brainhub databaseへ `postgres:5432` で接続する。これらの内部URLはComposeが設定するため、`.env` でホスト用URLを二重管理しない。
 
-```bash
-set -a; source .env; set +a
-go run ./cmd/migrate up
-go run ./api
+GBrainのOAuth discoveryには `GBRAIN_PUBLIC_URL` がissuerとして載る。公開先を変更するときは、`PUBLIC_MCP_URL` を同じoriginの `/mcp` に揃える。
+
+脳の作成と参照:
+
+```text
+POST /api/brains                         ログイン必須
+POST /api/brains/{sourceID}/adopt        既存GBrain sourceを所有する（ログイン必須）
+GET  /api/brains                         閲覧可能なBrainの配列
+GET  /api/brains/{sourceID}              閲覧不可も404
+GET  /api/brains/{sourceID}/pages        閲覧不可も404
 ```
 
+`GET /api/brains` はGBrainのsource形式ではなく、`id` / `source_id` / `name` / `description` / `visibility` / `state` などBrain固有の情報を返す。GBrain側だけにあるsourceは返さない。
+
 本番では `BRAINHUB_ENV=production` を設定し、session cookie に `Secure` を付ける。
+
+### 開発
+
+初回またはDockerfile・依存関係を変更した後は、対象サービスを再ビルドする。
+
+```bash
+docker compose up -d --build brainhub web
+```
+
+フロントをホットリロードしたい場合は、APIコンテナを起動したままViteをホストで動かす。Viteの `/api` プロキシは `http://localhost:8080` を使う。
+
+```bash
+npm --prefix web ci
+npm --prefix web run dev
+```
+
+Goの変更を自動検知してコンテナを再ビルド・再起動する場合はCompose Watchを使う。常駐する開発専用サービスや追加のリローダーは使わない。
+
+```bash
+docker compose watch brainhub
+```
 
 ## ハマりどころ
 
@@ -201,8 +240,7 @@ go run ./api
 - `sources add --path` の対象は git リポジトリでなければならない。
 - volume は名前付きではなくホストパスを使う。`docker compose down -v` で正本が消えないようにするため。
 - `sync` が滞ると検索結果が古いまま返る。`autopilot` を必ず起動しておく。
-- `BRAINHUB_DATABASE_URL` のホストは実行場所で変わる。
-  ホストで `go run` → `127.0.0.1:55433` / コンテナ内 → `postgres:5432`
+- `BRAINHUB_DATABASE_URL` はDocker内部の `postgres:5432` に固定する。ホスト用URLを別に持たない。
 
 ## 進め方
 

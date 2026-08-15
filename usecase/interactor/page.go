@@ -3,8 +3,10 @@ package interactor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
 	"brainhub/usecase/output_port"
@@ -13,17 +15,20 @@ import (
 const DefaultPublicPageTypes = "decision,idea,research,note,concept,analysis,project,report,person,task-list"
 
 type pageUseCase struct {
-	pageRepository   output_port.PageRepository
-	sourceRepository output_port.SourceRepository
-	allowed          map[string]struct{}
+	pageRepository output_port.PageRepository
+	brains         output_port.BrainRepository
+	memberships    output_port.MembershipRepository
+	allowed        map[string]struct{}
 }
 
-func NewPageUseCase(pageRepository output_port.PageRepository, sourceRepository output_port.SourceRepository, publicPageTypes string) (input_port.PageUseCase, error) {
-	if pageRepository == nil {
-		return nil, errors.New("page repository is required")
-	}
-	if sourceRepository == nil {
-		return nil, errors.New("source repository is required")
+func NewPageUseCase(
+	pageRepository output_port.PageRepository,
+	brains output_port.BrainRepository,
+	memberships output_port.MembershipRepository,
+	publicPageTypes string,
+) (input_port.PageUseCase, error) {
+	if pageRepository == nil || brains == nil || memberships == nil {
+		return nil, errors.New("all page dependencies are required")
 	}
 
 	allowed := make(map[string]struct{})
@@ -37,26 +42,37 @@ func NewPageUseCase(pageRepository output_port.PageRepository, sourceRepository 
 	}
 
 	return &pageUseCase{
-		pageRepository:   pageRepository,
-		sourceRepository: sourceRepository,
-		allowed:          allowed,
+		pageRepository: pageRepository,
+		brains:         brains,
+		memberships:    memberships,
+		allowed:        allowed,
 	}, nil
 }
 
-func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID) ([]entity.Page, error) {
-	sources, err := u.sourceRepository.ListSources(ctx)
-	if err != nil {
-		return nil, err
+func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID, viewerID string) ([]entity.Page, error) {
+	brain, err := u.brains.FindBrainBySourceID(ctx, sourceID)
+	if errors.Is(err, output_port.ErrNotFound) {
+		return nil, input_port.ErrBrainNotFound
 	}
-	found := false
-	for _, source := range sources {
-		if source.ID == sourceID.String() {
-			found = true
-			break
+	if err != nil {
+		return nil, fmt.Errorf("find brain: %w", err)
+	}
+
+	role := entconst.Role("")
+	if viewerID != "" {
+		memberships, err := u.memberships.ListActiveMembershipsByUser(ctx, viewerID)
+		if err != nil {
+			return nil, fmt.Errorf("list viewer memberships: %w", err)
+		}
+		for _, membership := range memberships {
+			if membership.BrainID == brain.ID {
+				role = membership.Role
+				break
+			}
 		}
 	}
-	if !found {
-		return nil, input_port.ErrSourceNotFound
+	if !canReadBrain(brain, role) {
+		return nil, input_port.ErrBrainNotFound
 	}
 
 	pages, err := u.pageRepository.List(ctx, sourceID)

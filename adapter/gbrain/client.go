@@ -78,15 +78,9 @@ type upstreamPage struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type upstreamSourcesResponse struct {
+type upstreamSources struct {
 	Sources []struct {
-		ID         string     `json:"id"`
-		Name       string     `json:"name"`
-		LocalPath  *string    `json:"local_path"`
-		RemoteURL  *string    `json:"remote_url"`
-		Federated  bool       `json:"federated"`
-		PageCount  int        `json:"page_count"`
-		LastSyncAt *time.Time `json:"last_sync_at"`
+		ID string `json:"id"`
 	} `json:"sources"`
 }
 
@@ -137,6 +131,30 @@ func (c *Client) List(ctx context.Context, sourceID entity.SourceID) ([]entity.P
 	}
 }
 
+func (c *Client) Exists(ctx context.Context, sourceID entity.SourceID) (bool, error) {
+	response, err := c.callTool(ctx, 1, "sources_list", map[string]any{})
+	if err != nil {
+		return false, err
+	}
+	if response.Error != nil {
+		return false, fmt.Errorf("GBrain sources_list failed: %s", response.Error.Message)
+	}
+	if response.Result == nil || len(response.Result.Content) == 0 {
+		return false, errors.New("GBrain sources_list returned no content")
+	}
+
+	var sources upstreamSources
+	if err := json.Unmarshal([]byte(response.Result.Content[0].Text), &sources); err != nil {
+		return false, fmt.Errorf("decode GBrain sources: %w", err)
+	}
+	for _, source := range sources.Sources {
+		if source.ID == sourceID.String() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (c *Client) listPageBatch(ctx context.Context, offset int) ([]upstreamPage, error) {
 	response, err := c.callTool(ctx, offset+1, "list_pages", map[string]any{
 		"limit":  pageLimit,
@@ -157,37 +175,6 @@ func (c *Client) listPageBatch(ctx context.Context, offset int) ([]upstreamPage,
 		return nil, fmt.Errorf("decode GBrain pages: %w", err)
 	}
 	return pages, nil
-}
-
-func (c *Client) ListSources(ctx context.Context) ([]entity.Source, error) {
-	response, err := c.callTool(ctx, 1, "sources_list", map[string]any{})
-	if err != nil {
-		return nil, err
-	}
-	if response.Error != nil {
-		return nil, fmt.Errorf("GBrain sources_list failed: %s", response.Error.Message)
-	}
-	if response.Result == nil || len(response.Result.Content) == 0 {
-		return nil, errors.New("GBrain sources_list returned no content")
-	}
-
-	var upstream upstreamSourcesResponse
-	if err := json.Unmarshal([]byte(response.Result.Content[0].Text), &upstream); err != nil {
-		return nil, fmt.Errorf("decode GBrain sources: %w", err)
-	}
-	sources := make([]entity.Source, len(upstream.Sources))
-	for i, source := range upstream.Sources {
-		sources[i] = entity.Source{
-			ID:         source.ID,
-			Name:       source.Name,
-			LocalPath:  source.LocalPath,
-			RemoteURL:  source.RemoteURL,
-			Federated:  source.Federated,
-			PageCount:  source.PageCount,
-			LastSyncAt: source.LastSyncAt,
-		}
-	}
-	return sources, nil
 }
 
 func (c *Client) callTool(ctx context.Context, id int, name string, arguments map[string]any) (*rpcResponse, error) {
@@ -310,6 +297,11 @@ func (c *Client) discoverTokenEndpoint(ctx context.Context) (string, error) {
 	if err != nil || endpoint.Scheme == "" || endpoint.Host == "" {
 		return "", errors.New("GBrain OAuth discovery returned an invalid token endpoint")
 	}
+	// Discovery advertises the public issuer. Keep its authoritative path, but
+	// use the configured internal GBrain origin for backend-to-backend traffic.
+	endpoint.Scheme = c.baseURL.Scheme
+	endpoint.Host = c.baseURL.Host
+	endpoint.User = c.baseURL.User
 	return endpoint.String(), nil
 }
 

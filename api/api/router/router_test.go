@@ -15,22 +15,66 @@ import (
 	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
-	"brainhub/usecase/interactor"
 )
 
-type pageRepository struct {
+type pageUseCase struct {
 	sourceID entity.SourceID
 	pages    []entity.Page
-	sources  []entity.Source
 }
 
-func (r *pageRepository) List(_ context.Context, sourceID entity.SourceID) ([]entity.Page, error) {
+func (r *pageUseCase) List(_ context.Context, sourceID entity.SourceID, _ string) ([]entity.Page, error) {
 	r.sourceID = sourceID
+	if sourceID != "brainhub" {
+		return nil, input_port.ErrBrainNotFound
+	}
 	return r.pages, nil
 }
 
-func (r *pageRepository) ListSources(context.Context) ([]entity.Source, error) {
-	return r.sources, nil
+type brainUseCase struct {
+	brains []entity.Brain
+}
+
+func (u *brainUseCase) Create(_ context.Context, ownerID string, input input_port.CreateBrainInput) (entity.Brain, error) {
+	brain := entity.Brain{
+		ID: "new-brain-id", SourceID: entity.SourceID(input.SourceID), Name: input.Name,
+		Description: input.Description, Visibility: input.Visibility, OwnerID: ownerID,
+		State: entconst.BrainStateReady,
+	}
+	u.brains = append(u.brains, brain)
+	return brain, nil
+}
+
+func (u *brainUseCase) Adopt(_ context.Context, ownerID string, sourceID entity.SourceID, input input_port.AdoptBrainInput) (entity.Brain, error) {
+	for _, brain := range u.brains {
+		if brain.SourceID == sourceID {
+			return entity.Brain{}, input_port.ErrBrainAlreadyExists
+		}
+	}
+	if sourceID == "missing" {
+		return entity.Brain{}, input_port.ErrSourceNotFound
+	}
+	if input.Visibility == "" {
+		input.Visibility = entconst.VisibilityPrivate
+	}
+	brain := entity.Brain{
+		ID: "adopted-brain-id", SourceID: sourceID, Name: input.Name, Description: input.Description,
+		Visibility: input.Visibility, OwnerID: ownerID, State: entconst.BrainStateReady,
+	}
+	u.brains = append(u.brains, brain)
+	return brain, nil
+}
+
+func (u *brainUseCase) List(context.Context, string) ([]entity.Brain, error) {
+	return u.brains, nil
+}
+
+func (u *brainUseCase) Get(_ context.Context, sourceID entity.SourceID, _ string) (entity.Brain, error) {
+	for _, brain := range u.brains {
+		if brain.SourceID == sourceID {
+			return brain, nil
+		}
+	}
+	return entity.Brain{}, input_port.ErrBrainNotFound
 }
 
 type authUseCase struct {
@@ -68,34 +112,34 @@ func (u *authUseCase) Logout(context.Context, string) error {
 
 func TestRoutes(t *testing.T) {
 	now := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
-	repository := &pageRepository{
+	pages := &pageUseCase{
 		pages: []entity.Page{
 			{Slug: "decisions/public", Title: "Public", Type: "decision", UpdatedAt: now},
 			{Slug: "tasks/public", Title: "Tasks", Type: "task-list", UpdatedAt: now},
-			{Slug: "extracts/internal", Title: "Internal", Type: "extract_receipt", UpdatedAt: now},
-		},
-		sources: []entity.Source{
-			{ID: "default", Name: "default"},
-			{ID: "brainhub", Name: "brainhub", Federated: true, PageCount: 3, LastSyncAt: &now},
 		},
 	}
-	brainUseCase, err := interactor.NewBrainUseCase(repository)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pageUseCase, err := interactor.NewPageUseCase(repository, repository, interactor.DefaultPublicPageTypes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	brains := &brainUseCase{brains: []entity.Brain{
+		{
+			ID: "brain-id", SourceID: "brainhub", Name: "Brainhub", Description: "Public brain",
+			Visibility: entconst.VisibilityPublic, OwnerID: "user-id", State: entconst.BrainStateReady,
+			CreatedAt: now, UpdatedAt: now,
+		},
+	}}
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Proxied-Path", r.URL.Path)
+		w.Header().Set("X-Proxied-Query", r.URL.RawQuery)
+		if r.URL.Path == "/authorize" {
+			w.Header().Set("Location", "/admin/consent?request=test")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	auth := &authUseCase{user: entity.User{
 		ID: "user-id", Email: "alice@example.com", Name: "Alice", State: entconst.UserStateActive,
 		CreatedAt: now, UpdatedAt: now,
 	}}
-	server := httptest.NewServer(router.New(brainUseCase, pageUseCase, auth, "https://mcp.example.com/mcp", proxy, false))
+	server := httptest.NewServer(router.New(brains, pages, auth, "https://mcp.example.com/mcp", proxy, false))
 	defer server.Close()
 
 	t.Run("healthz", func(t *testing.T) {
@@ -134,17 +178,15 @@ func TestRoutes(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer response.Body.Close()
-		var body struct {
-			Sources []map[string]any `json:"sources"`
-		}
+		var body []map[string]any
 		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if response.StatusCode != http.StatusOK || len(body.Sources) != 2 {
-			t.Fatalf("status/sources = %d %v", response.StatusCode, body.Sources)
+		if response.StatusCode != http.StatusOK || len(body) != 1 {
+			t.Fatalf("status/brains = %d %v", response.StatusCode, body)
 		}
-		if len(body.Sources[1]) != 7 {
-			t.Fatalf("source fields = %v; want GBrain's seven fields", body.Sources[1])
+		if body[0]["source_id"] != "brainhub" || body[0]["description"] != "Public brain" || body[0]["state"] != "ready" {
+			t.Fatalf("brain response = %v", body[0])
 		}
 	})
 
@@ -158,8 +200,8 @@ func TestRoutes(t *testing.T) {
 		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if repository.sourceID.String() != "brainhub" {
-			t.Errorf("source ID = %q", repository.sourceID)
+		if pages.sourceID.String() != "brainhub" {
+			t.Errorf("source ID = %q", pages.sourceID)
 		}
 		if len(body) != 2 {
 			t.Fatalf("pages = %d; want 2 public types", len(body))
@@ -204,6 +246,28 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
+	t.Run("create brain requires session", func(t *testing.T) {
+		response, err := http.Post(server.URL+"/api/brains", "application/json", bytes.NewBufferString(`{"source_id":"private-brain","name":"Private"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d; want 401", response.StatusCode)
+		}
+	})
+
+	t.Run("adopt brain requires session", func(t *testing.T) {
+		response, err := http.Post(server.URL+"/api/brains/existing/adopt", "application/json", bytes.NewBufferString(`{"name":"Existing"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d; want 401", response.StatusCode)
+		}
+	})
+
 	var sessionCookie *http.Cookie
 	t.Run("register", func(t *testing.T) {
 		response, err := http.Post(server.URL+"/api/auth/register", "application/json", bytes.NewBufferString(`{"email":"alice@example.com","password":"correct-password","name":"Alice"}`))
@@ -238,6 +302,70 @@ func TestRoutes(t *testing.T) {
 		}
 		if response.StatusCode != http.StatusOK || user["email"] != "alice@example.com" {
 			t.Fatalf("status/user = %d %v", response.StatusCode, user)
+		}
+	})
+
+	t.Run("create brain", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/brains", bytes.NewBufferString(`{"source_id":"private-brain","name":"Private","description":"Owned","visibility":"private"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusCreated || body["source_id"] != "private-brain" || body["owner_id"] != "user-id" {
+			t.Fatalf("status/body = %d %v", response.StatusCode, body)
+		}
+	})
+
+	t.Run("adopt brain", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/brains/adopted/adopt", bytes.NewBufferString(`{"name":"Adopted","description":"Existing source"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusCreated || body["source_id"] != "adopted" || body["visibility"] != "private" || body["state"] != "ready" {
+			t.Fatalf("status/body = %d %v", response.StatusCode, body)
+		}
+	})
+
+	t.Run("adopt missing source", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/brains/missing/adopt", bytes.NewBufferString(`{"name":"Missing"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d; want 404", response.StatusCode)
+		}
+	})
+
+	t.Run("adopt registered brain", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/brains/adopted/adopt", bytes.NewBufferString(`{"name":"Adopted"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusConflict {
+			t.Fatalf("status = %d; want 409", response.StatusCode)
 		}
 	})
 
@@ -298,7 +426,7 @@ func TestRoutes(t *testing.T) {
 
 	t.Run("production cookie is secure", func(t *testing.T) {
 		productionAuth := &authUseCase{user: auth.user}
-		productionServer := httptest.NewServer(router.New(brainUseCase, pageUseCase, productionAuth, "https://mcp.example.com/mcp", proxy, true))
+		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, "https://mcp.example.com/mcp", proxy, true))
 		defer productionServer.Close()
 		response, err := http.Post(productionServer.URL+"/api/auth/register", "application/json", bytes.NewBufferString(`{"email":"alice@example.com","password":"correct-password","name":"Alice"}`))
 		if err != nil {
@@ -310,7 +438,14 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
-	for _, path := range []string{"/mcp", "/mcp/tools", "/.well-known/oauth-authorization-server"} {
+	for _, path := range []string{
+		"/mcp",
+		"/mcp/tools",
+		"/.well-known/oauth-authorization-server",
+		"/token",
+		"/revoke",
+		"/register",
+	} {
 		t.Run("proxy "+path, func(t *testing.T) {
 			request, _ := http.NewRequest(http.MethodDelete, server.URL+path, nil)
 			response, err := http.DefaultClient.Do(request)
@@ -323,6 +458,29 @@ func TestRoutes(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("proxy authorize without following redirect", func(t *testing.T) {
+		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}
+		response, err := client.Get(server.URL + "/authorize?response_type=code&client_id=test-client")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusFound {
+			t.Fatalf("status = %d; want 302", response.StatusCode)
+		}
+		if got := response.Header.Get("Location"); got != "/admin/consent?request=test" {
+			t.Fatalf("Location = %q", got)
+		}
+		if got := response.Header.Get("X-Proxied-Path"); got != "/authorize" {
+			t.Fatalf("proxied path = %q", got)
+		}
+		if got := response.Header.Get("X-Proxied-Query"); got != "response_type=code&client_id=test-client" {
+			t.Fatalf("proxied query = %q", got)
+		}
+	})
 
 	t.Run("healthz method", func(t *testing.T) {
 		request, _ := http.NewRequest(http.MethodPost, server.URL+"/healthz", nil)

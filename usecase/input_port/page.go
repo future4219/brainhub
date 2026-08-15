@@ -7,5 +7,5 @@ import (
 )
 
 type PageUseCase interface {
-	List(context.Context, entity.SourceID) ([]entity.Page, error)
+	List(context.Context, entity.SourceID, string) ([]entity.Page, error)
 }
