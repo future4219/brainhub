@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: brainhub-gbrain-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gbrain
+      POSTGRES_USER: gbrain
+      POSTGRES_PASSWORD: ${GBRAIN_POSTGRES_PASSWORD:?GBRAIN_POSTGRES_PASSWORD must be set}
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - /home/futur/dev/brainhub-data/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gbrain -d gbrain"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  gbrain:
+    image: brainhub-gbrain:v0.45.12.0
+    container_name: brainhub-gbrain
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/gbrain/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GBRAIN_HOME: /var/lib/gbrain-home
+      GBRAIN_DATABASE_URL: postgresql://gbrain:${GBRAIN_POSTGRES_PASSWORD:?GBRAIN_POSTGRES_PASSWORD must be set}@postgres:5432/gbrain
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}
+      GBRAIN_SKILLS_DIR: /home/bun/.bun/install/global/node_modules/gbrain/skills
+    command: ["gbrain", "serve", "--http", "--bind", "0.0.0.0", "--port", "3131"]
+    ports:
+      - "127.0.0.1:3131:3131"
+    volumes:
+      - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
+      - /home/futur/dev/brainhub-data/brains/default:/brain
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - fetch("http://127.0.0.1:3131/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  autopilot:
+    image: brainhub-gbrain:v0.45.12.0
+    container_name: brainhub-gbrain-autopilot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gbrain:
+        condition: service_healthy
+    environment:
+      GBRAIN_HOME: /var/lib/gbrain-home
+      GBRAIN_DATABASE_URL: postgresql://gbrain:${GBRAIN_POSTGRES_PASSWORD:?GBRAIN_POSTGRES_PASSWORD must be set}@postgres:5432/gbrain
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}
+      GBRAIN_SKILLS_DIR: /home/bun/.bun/install/global/node_modules/gbrain/skills
+    command: ["gbrain", "autopilot", "--repo", "/brain", "--interval", "300"]
+    volumes:
+      - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
+      - /home/futur/dev/brainhub-data/brains/default:/brain
