@@ -82,6 +82,49 @@ type authUseCase struct {
 	user   entity.User
 }
 
+type accessUseCase struct {
+	now time.Time
+}
+
+func (u *accessUseCase) CreateInvitation(_ context.Context, _ entity.SourceID, actorID string, input input_port.CreateInvitationInput) (entity.Invitation, string, error) {
+	return entity.Invitation{ID: "invitation-id", BrainID: "brain-id", Email: nil, Role: input.Role, InvitedBy: actorID, State: entity.InvitationStatePending, ExpiresAt: input.ExpiresAt, CreatedAt: u.now}, "raw-invitation-token", nil
+}
+
+func (u *accessUseCase) ListInvitations(context.Context, entity.SourceID, string) ([]entity.Invitation, error) {
+	return []entity.Invitation{{ID: "invitation-id", State: entity.InvitationStatePending, Role: entity.RoleReader, ExpiresAt: u.now.Add(time.Hour), CreatedAt: u.now}}, nil
+}
+
+func (u *accessUseCase) RevokeInvitation(context.Context, string, string) error { return nil }
+
+func (u *accessUseCase) PreviewInvitation(_ context.Context, token string) (input_port.InvitationPreview, error) {
+	if token != "raw-invitation-token" {
+		return input_port.InvitationPreview{}, input_port.ErrInvitationNotFound
+	}
+	return input_port.InvitationPreview{BrainName: "Brainhub", InvitedByName: "Alice"}, nil
+}
+
+func (u *accessUseCase) AcceptInvitation(context.Context, string, entity.User) (input_port.AcceptedInvitation, error) {
+	return input_port.AcceptedInvitation{Membership: entity.Membership{Role: entity.RoleReader}, SourceID: "brainhub", BrainName: "Brainhub"}, nil
+}
+
+func (u *accessUseCase) IssueClient(context.Context, entity.SourceID, string, string) (entity.IssuedClient, error) {
+	clientID := "oauth-client-id"
+	return entity.IssuedClient{ID: "issued-id", GBrainClientID: &clientID, Label: "claude-web", State: entity.ClientStateActive, IssuedAt: u.now}, nil
+}
+
+func (u *accessUseCase) ListClients(context.Context, entity.SourceID, string) ([]entity.IssuedClient, error) {
+	client, _ := u.IssueClient(context.Background(), "brainhub", "user-id", "claude-web")
+	return []entity.IssuedClient{client}, nil
+}
+
+func (u *accessUseCase) RevokeClient(context.Context, string, string) (entity.IssuedClient, error) {
+	return entity.IssuedClient{ID: "issued-id", State: entity.ClientStateRevoked}, nil
+}
+
+func (u *accessUseCase) RevokeMembership(context.Context, entity.SourceID, string, string) error {
+	return nil
+}
+
 func (u *authUseCase) Register(context.Context, input_port.RegisterInput) (entity.User, entity.Session, string, error) {
 	u.active = true
 	return u.user, entity.Session{ID: "session-id", UserID: u.user.ID, ExpiresAt: time.Now().Add(30 * 24 * time.Hour)}, "register-token", nil
@@ -139,7 +182,8 @@ func TestRoutes(t *testing.T) {
 		ID: "user-id", Email: "alice@example.com", Name: "Alice", State: entconst.UserStateActive,
 		CreatedAt: now, UpdatedAt: now,
 	}}
-	server := httptest.NewServer(router.New(brains, pages, auth, "https://mcp.example.com/mcp", proxy, false))
+	access := &accessUseCase{now: now}
+	server := httptest.NewServer(router.New(brains, pages, auth, access, "https://mcp.example.com/mcp", proxy, false))
 	defer server.Close()
 
 	t.Run("healthz", func(t *testing.T) {
@@ -369,6 +413,57 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
+	t.Run("invitation and client routes", func(t *testing.T) {
+		preview, err := http.Get(server.URL + "/api/invitations/raw-invitation-token")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer preview.Body.Close()
+		var previewBody map[string]string
+		_ = json.NewDecoder(preview.Body).Decode(&previewBody)
+		if preview.StatusCode != http.StatusOK || len(previewBody) != 2 || previewBody["brain_name"] != "Brainhub" {
+			t.Fatalf("preview status/body = %d %v", preview.StatusCode, previewBody)
+		}
+
+		request := func(method, path, body string) *http.Response {
+			req, _ := http.NewRequest(method, server.URL+path, bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(sessionCookie)
+			response, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return response
+		}
+		created := request(http.MethodPost, "/api/brains/brainhub/invitations", `{"role":"reader","expires_at":"2026-08-16T01:00:00Z"}`)
+		var createdBody map[string]any
+		_ = json.NewDecoder(created.Body).Decode(&createdBody)
+		created.Body.Close()
+		if created.StatusCode != http.StatusCreated || createdBody["token"] != "raw-invitation-token" {
+			t.Fatalf("create invitation = %d %v", created.StatusCode, createdBody)
+		}
+		for _, test := range []struct {
+			method string
+			path   string
+			body   string
+			status int
+		}{
+			{http.MethodGet, "/api/brains/brainhub/invitations", "", http.StatusOK},
+			{http.MethodPost, "/api/invitations/raw-invitation-token/accept", "", http.StatusCreated},
+			{http.MethodPost, "/api/brains/brainhub/clients", `{"label":"claude-web"}`, http.StatusCreated},
+			{http.MethodGet, "/api/brains/brainhub/clients", "", http.StatusOK},
+			{http.MethodDelete, "/api/clients/issued-id", "", http.StatusNoContent},
+			{http.MethodDelete, "/api/invitations/invitation-id", "", http.StatusNoContent},
+			{http.MethodDelete, "/api/brains/brainhub/members/other-user", "", http.StatusNoContent},
+		} {
+			response := request(test.method, test.path, test.body)
+			response.Body.Close()
+			if response.StatusCode != test.status {
+				t.Errorf("%s %s = %d; want %d", test.method, test.path, response.StatusCode, test.status)
+			}
+		}
+	})
+
 	t.Run("me without cookie", func(t *testing.T) {
 		response, err := http.Get(server.URL + "/api/me")
 		if err != nil {
@@ -426,7 +521,7 @@ func TestRoutes(t *testing.T) {
 
 	t.Run("production cookie is secure", func(t *testing.T) {
 		productionAuth := &authUseCase{user: auth.user}
-		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, "https://mcp.example.com/mcp", proxy, true))
+		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, access, "https://mcp.example.com/mcp", proxy, true))
 		defer productionServer.Close()
 		response, err := http.Post(productionServer.URL+"/api/auth/register", "application/json", bytes.NewBufferString(`{"email":"alice@example.com","password":"correct-password","name":"Alice"}`))
 		if err != nil {

@@ -55,6 +55,14 @@ func (s *Store) FindBrainBySourceID(ctx context.Context, sourceID entity.SourceI
 	return brain, nil
 }
 
+func (s *Store) FindBrainByID(ctx context.Context, id string) (entity.Brain, error) {
+	brain, err := scanBrain(s.queries.QueryRow(ctx, `SELECT `+brainColumns+` FROM brains WHERE id = $1`, id))
+	if err != nil {
+		return entity.Brain{}, mapError(err)
+	}
+	return brain, nil
+}
+
 func (s *Store) TransitionBrain(ctx context.Context, id string, state entconst.BrainState, reason string, now time.Time) (entity.Brain, error) {
 	brain, err := scanBrain(s.queries.QueryRow(ctx, `
 		UPDATE brains

@@ -45,7 +45,7 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}
 	membership := entity.Membership{
-		ID: ids.New(), BrainID: brain.ID, UserID: user.ID, Role: entconst.RoleOwner,
+		ID: ids.New(), BrainID: brain.ID, UserID: user.ID, Role: entity.RoleOwner,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	t.Cleanup(func() {
@@ -67,7 +67,7 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 		t.Fatalf("stored brain = %+v %v", stored, err)
 	}
 	memberships, err := store.ListActiveMembershipsByUser(ctx, user.ID)
-	if err != nil || len(memberships) != 1 || memberships[0].Role != entconst.RoleOwner {
+	if err != nil || len(memberships) != 1 || memberships[0].Role != entity.RoleOwner {
 		t.Fatalf("memberships = %+v %v", memberships, err)
 	}
 	ready, err := store.TransitionBrain(ctx, brain.ID, entconst.BrainStateReady, "", now.Add(time.Second))

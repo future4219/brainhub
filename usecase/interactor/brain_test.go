@@ -121,7 +121,7 @@ func TestBrainCreateStateMachine(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if brain.State != entconst.BrainStateReady || len(repositories.memberships) != 1 || repositories.memberships[0].Role != entconst.RoleOwner {
+		if brain.State != entconst.BrainStateReady || len(repositories.memberships) != 1 || repositories.memberships[0].Role != entity.RoleOwner {
 			t.Fatalf("brain/membership = %+v %+v", brain, repositories.memberships)
 		}
 		if len(provisioner.calls) != 1 || provisioner.calls[0] != "accounting" {
@@ -167,7 +167,7 @@ func TestBrainAdopt(t *testing.T) {
 		if brain.State != entconst.BrainStateReady || brain.Visibility != entconst.VisibilityPrivate {
 			t.Fatalf("adopted brain = %+v", brain)
 		}
-		if len(repositories.memberships) != 1 || repositories.memberships[0].Role != entconst.RoleOwner {
+		if len(repositories.memberships) != 1 || repositories.memberships[0].Role != entity.RoleOwner {
 			t.Fatalf("memberships = %+v", repositories.memberships)
 		}
 		if len(provisioner.calls) != 0 {
@@ -224,8 +224,8 @@ func TestBrainVisibilityUsesMembership(t *testing.T) {
 	repositories := &brainRepositoriesMock{
 		brains: []entity.Brain{readyPublic, readyPrivate, failed},
 		memberships: []entity.Membership{
-			{BrainID: "private", UserID: "viewer", Role: entconst.RoleReader},
-			{BrainID: "failed", UserID: "owner-member", Role: entconst.RoleOwner},
+			{BrainID: "private", UserID: "viewer", Role: entity.RoleReader},
+			{BrainID: "failed", UserID: "owner-member", Role: entity.RoleOwner},
 		},
 	}
 	useCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, &provisionerMock{}, &sourceCatalogMock{}, fixedClock{}, &sequenceIDs{})
@@ -268,7 +268,7 @@ func TestPageAccessIsCheckedBeforeGBrain(t *testing.T) {
 	if pages.called {
 		t.Fatal("GBrain was called before authorization")
 	}
-	repositories.memberships = append(repositories.memberships, entity.Membership{BrainID: "private", UserID: "reader", Role: entconst.RoleReader})
+	repositories.memberships = append(repositories.memberships, entity.Membership{BrainID: "private", UserID: "reader", Role: entity.RoleReader})
 	visible, err := useCase.List(context.Background(), "private", "reader")
 	if err != nil || len(visible) != 1 || visible[0].Slug != "allowed" {
 		t.Fatalf("visible pages = %+v %v", visible, err)

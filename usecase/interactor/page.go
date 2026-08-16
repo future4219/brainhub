@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
 	"brainhub/usecase/output_port"
@@ -58,7 +57,7 @@ func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID, viewer
 		return nil, fmt.Errorf("find brain: %w", err)
 	}
 
-	role := entconst.Role("")
+	role := entity.Role("")
 	if viewerID != "" {
 		memberships, err := u.memberships.ListActiveMembershipsByUser(ctx, viewerID)
 		if err != nil {

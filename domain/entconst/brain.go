@@ -16,11 +16,3 @@ const (
 	VisibilityPrivate Visibility = "private"
 	VisibilityPublic  Visibility = "public"
 )
-
-type Role string
-
-const (
-	RoleOwner  Role = "owner"
-	RoleEditor Role = "editor"
-	RoleReader Role = "reader"
-)

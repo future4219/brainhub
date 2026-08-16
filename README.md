@@ -105,6 +105,7 @@ GBRAIN_POSTGRES_PASSWORD=
 BRAINHUB_DATABASE_URL=postgresql://brainhub:<password>@postgres:5432/brainhub
 BRAINHUB_GBRAIN_CLIENT_ID=
 BRAINHUB_GBRAIN_CLIENT_SECRET=
+GBRAIN_ADMIN_BOOTSTRAP_TOKEN=
 SHIM_TOKEN=
 # 公開先を変える場合は2つを同じoriginに揃える
 GBRAIN_PUBLIC_URL=http://localhost:8080
@@ -206,11 +207,20 @@ POST /api/brains/{sourceID}/adopt        既存GBrain sourceを所有する（�
 GET  /api/brains                         閲覧可能なBrainの配列
 GET  /api/brains/{sourceID}              閲覧不可も404
 GET  /api/brains/{sourceID}/pages        閲覧不可も404
+POST /api/brains/{sourceID}/invitations  ownerのみ。招待tokenは作成時だけ返す
+GET  /api/brains/{sourceID}/invitations  ownerのみ。生tokenは返さない
+POST /api/invitations/{token}/accept     招待を受諾してMembershipを作る
+POST /api/brains/{sourceID}/clients      Claude向けpublic OAuth clientを発行
+GET  /api/brains/{sourceID}/clients      自分の発行済みclient一覧
+DELETE /api/clients/{id}                 自分のclientを失効
+DELETE /api/brains/{sourceID}/members/{userID} ownerのみ。clientも連鎖失効
 ```
 
 `GET /api/brains` はGBrainのsource形式ではなく、`id` / `source_id` / `name` / `description` / `visibility` / `state` などBrain固有の情報を返す。GBrain側だけにあるsourceは返さない。
 
 本番では `BRAINHUB_ENV=production` を設定し、session cookie に `Secure` を付ける。
+
+Claude Webへ接続するときはMCP URLだけでなく、brainhubで発行したOAuth Client IDをコネクタ編集画面へ設定する。発行するclientはpublic clientなのでsecretはない。
 
 ### 開発
 

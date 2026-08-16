@@ -28,6 +28,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	adminClient, err := gbrain.NewAdminClient(configuration.GBrainBaseURL, configuration.GBrainAdminToken)
+	if err != nil {
+		log.Fatal(err)
+	}
 	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL)
 	if err != nil {
 		log.Fatal(err)
@@ -68,10 +72,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	accessUseCase, err := interactor.NewAccessUseCase(
+		repositories, repositories, repositories, repositories, repositories,
+		repositories, adminClient, clock, ids,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           router.New(brainUseCase, pageUseCase, authUseCase, configuration.PublicMCPURL, proxy, configuration.Production),
+		Handler:           router.New(brainUseCase, pageUseCase, authUseCase, accessUseCase, configuration.PublicMCPURL, proxy, configuration.Production),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -21,7 +21,7 @@ func TestNewBrainCreate(t *testing.T) {
 		t.Fatalf("unexpected defaults: state=%q visibility=%q", brain.State, brain.Visibility)
 	}
 	membership := NewOwnerMembership("membership-id", brain.ID, brain.OwnerID, now)
-	if membership.Role != entconst.RoleOwner || !membership.IsActive() {
+	if membership.Role != entity.RoleOwner || !membership.IsActive() {
 		t.Fatalf("unexpected owner membership: %#v", membership)
 	}
 	adopted, err := NewBrainAdopt("adopted-id", entity.SourceID("existing"), "Existing", "", "", "user-id", now)

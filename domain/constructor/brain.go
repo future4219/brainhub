@@ -51,7 +51,7 @@ func NewOwnerMembership(id, brainID, userID string, now time.Time) entity.Member
 		ID:        id,
 		BrainID:   brainID,
 		UserID:    userID,
-		Role:      entconst.RoleOwner,
+		Role:      entity.RoleOwner,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

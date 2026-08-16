@@ -5,8 +5,49 @@ export type Brain = {
   source_id: string;
   name: string;
   description: string;
+  owner_id: string;
   visibility: "public" | "private";
   state: BrainState;
+};
+
+export type Role = "owner" | "editor" | "reader";
+
+export type Invitation = {
+  id: string;
+  email: string | null;
+  role: Role;
+  state: "pending" | "accepted" | "revoked" | "expired";
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+};
+
+export type CreatedInvitation = Invitation & { token: string };
+
+export type InvitationPreview = {
+  brain_name: string;
+  invited_by_name: string;
+};
+
+export type AcceptedInvitation = {
+  source_id: string;
+  brain_name: string;
+  role: Role;
+};
+
+export type IssuedClient = {
+  id: string;
+  client_id: string | null;
+  label: string;
+  write_source_id: string | null;
+  read_source_ids: string[];
+  scopes: string[];
+  state: "issuing" | "active" | "revoked" | "orphan";
+  state_reason: string;
+  issued_at: string;
+  last_verified_at: string | null;
+  revoked_at: string | null;
 };
 
 export type Page = {
@@ -108,4 +149,36 @@ export function logout(): Promise<void> {
 
 export function createBrain(input: CreateBrainInput): Promise<Brain> {
   return postJSON("/api/brains", input);
+}
+
+export function createInvitation(sourceID: string, input: { email: string; role: Role; expires_at: string }): Promise<CreatedInvitation> {
+  return postJSON(`/api/brains/${encodeURIComponent(sourceID)}/invitations`, input);
+}
+
+export function listInvitations(sourceID: string): Promise<Invitation[]> {
+  return requestJSON(`/api/brains/${encodeURIComponent(sourceID)}/invitations`);
+}
+
+export function revokeInvitation(id: string): Promise<void> {
+  return requestJSON(`/api/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function getInvitation(token: string): Promise<InvitationPreview> {
+  return requestJSON(`/api/invitations/${encodeURIComponent(token)}`);
+}
+
+export function acceptInvitation(token: string): Promise<AcceptedInvitation> {
+  return postJSON(`/api/invitations/${encodeURIComponent(token)}/accept`);
+}
+
+export function issueClient(sourceID: string): Promise<IssuedClient> {
+  return postJSON(`/api/brains/${encodeURIComponent(sourceID)}/clients`, { label: "claude-web" });
+}
+
+export function listClients(sourceID: string): Promise<IssuedClient[]> {
+  return requestJSON(`/api/brains/${encodeURIComponent(sourceID)}/clients`);
+}
+
+export function revokeClient(id: string): Promise<void> {
+  return requestJSON(`/api/clients/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

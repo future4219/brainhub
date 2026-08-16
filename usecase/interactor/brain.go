@@ -157,8 +157,8 @@ func (u *brainUseCase) Get(ctx context.Context, sourceID entity.SourceID, viewer
 	return brain, nil
 }
 
-func (u *brainUseCase) rolesForViewer(ctx context.Context, viewerID string) (map[string]entconst.Role, error) {
-	roles := make(map[string]entconst.Role)
+func (u *brainUseCase) rolesForViewer(ctx context.Context, viewerID string) (map[string]entity.Role, error) {
+	roles := make(map[string]entity.Role)
 	if viewerID == "" {
 		return roles, nil
 	}
@@ -172,9 +172,9 @@ func (u *brainUseCase) rolesForViewer(ctx context.Context, viewerID string) (map
 	return roles, nil
 }
 
-func canReadBrain(brain entity.Brain, role entconst.Role) bool {
+func canReadBrain(brain entity.Brain, role entity.Role) bool {
 	if brain.State != entconst.BrainStateReady {
-		return role == entconst.RoleOwner
+		return role == entity.RoleOwner
 	}
 	return brain.Visibility == entconst.VisibilityPublic || role != ""
 }

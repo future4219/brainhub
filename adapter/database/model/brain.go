@@ -53,7 +53,7 @@ func (m Membership) Entity() entity.Membership {
 		ID:        m.ID,
 		BrainID:   m.BrainID,
 		UserID:    m.UserID,
-		Role:      entconst.Role(m.Role),
+		Role:      entity.Role(m.Role),
 		InvitedBy: m.InvitedBy,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,

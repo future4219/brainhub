@@ -16,6 +16,7 @@ type Config struct {
 	GBrainBaseURL      string
 	GBrainClientID     string
 	GBrainClientSecret string
+	GBrainAdminToken   string
 	ShimURL            string
 	ShimToken          string
 	PublicMCPURL       string
@@ -33,6 +34,10 @@ func Load() (Config, error) {
 	if clientID == "" || clientSecret == "" {
 		return Config{}, errors.New("BRAINHUB_GBRAIN_CLIENT_ID and BRAINHUB_GBRAIN_CLIENT_SECRET are required")
 	}
+	adminToken := os.Getenv("GBRAIN_ADMIN_BOOTSTRAP_TOKEN")
+	if adminToken == "" {
+		return Config{}, errors.New("GBRAIN_ADMIN_BOOTSTRAP_TOKEN is required")
+	}
 	shimToken := os.Getenv("SHIM_TOKEN")
 	if shimToken == "" {
 		return Config{}, errors.New("SHIM_TOKEN is required")
@@ -43,6 +48,7 @@ func Load() (Config, error) {
 		GBrainBaseURL:      envOrDefault("GBRAIN_BASE_URL", "http://localhost:3131"),
 		GBrainClientID:     clientID,
 		GBrainClientSecret: clientSecret,
+		GBrainAdminToken:   adminToken,
 		ShimURL:            envOrDefault("BRAINHUB_SHIM_URL", "http://127.0.0.1:8081"),
 		ShimToken:          shimToken,
 		PublicMCPURL:       envOrDefault("PUBLIC_MCP_URL", defaultPublicMCPURL),

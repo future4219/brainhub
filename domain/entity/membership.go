@@ -1,16 +1,12 @@
 package entity
 
-import (
-	"time"
-
-	"brainhub/domain/entconst"
-)
+import "time"
 
 type Membership struct {
 	ID        string
 	BrainID   string
 	UserID    string
-	Role      entconst.Role
+	Role      Role
 	InvitedBy *string
 	CreatedAt time.Time
 	UpdatedAt time.Time
