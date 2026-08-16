@@ -28,7 +28,7 @@ func TestNewBrainCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted.State != entconst.BrainStateReady || adopted.Visibility != entconst.VisibilityPrivate {
+	if adopted.State != entconst.BrainStateProvisioning || adopted.Visibility != entconst.VisibilityPrivate {
 		t.Fatalf("unexpected adopt defaults: state=%q visibility=%q", adopted.State, adopted.Visibility)
 	}
 }

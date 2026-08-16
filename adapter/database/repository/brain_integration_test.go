@@ -48,7 +48,11 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 		ID: ids.New(), BrainID: brain.ID, UserID: user.ID, Role: entity.RoleOwner,
 		CreatedAt: now, UpdatedAt: now,
 	}
+	writer := entity.BrainWriterClient{
+		BrainID: brain.ID, WriteSourceID: brain.SourceID, State: entity.WriterClientStateIssuing,
+	}
 	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM brain_writer_clients WHERE brain_id = $1", brain.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM memberships WHERE brain_id = $1", brain.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM brains WHERE id = $1", brain.ID)
 		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id = $1", user.ID)
@@ -58,7 +62,10 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 		if err := repositories.CreateBrain(ctx, brain); err != nil {
 			return err
 		}
-		return repositories.CreateMembership(ctx, membership)
+		if err := repositories.CreateMembership(ctx, membership); err != nil {
+			return err
+		}
+		return repositories.CreateBrainWriterClient(ctx, writer)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -69,6 +76,18 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 	memberships, err := store.ListActiveMembershipsByUser(ctx, user.ID)
 	if err != nil || len(memberships) != 1 || memberships[0].Role != entity.RoleOwner {
 		t.Fatalf("memberships = %+v %v", memberships, err)
+	}
+	storedWriter, err := store.FindBrainWriterClient(ctx, brain.ID)
+	if err != nil || storedWriter.State != entity.WriterClientStateIssuing || storedWriter.WriteSourceID != brain.SourceID {
+		t.Fatalf("stored writer = %+v %v", storedWriter, err)
+	}
+	storedWriter, err = store.ActivateBrainWriterClient(ctx, brain.ID, "gbrain-client-id", []byte("ciphertext"), now)
+	if err != nil || storedWriter.State != entity.WriterClientStateActive || storedWriter.GBrainClientID == nil {
+		t.Fatalf("active writer = %+v %v", storedWriter, err)
+	}
+	storedWriter, err = store.MarkBrainWriterClientOrphan(ctx, brain.ID, nil, "reissue required")
+	if err != nil || storedWriter.State != entity.WriterClientStateOrphan || storedWriter.GBrainClientID != nil || len(storedWriter.ClientSecretCiphertext) != 0 {
+		t.Fatalf("orphan writer = %+v %v", storedWriter, err)
 	}
 	ready, err := store.TransitionBrain(ctx, brain.ID, entconst.BrainStateReady, "", now.Add(time.Second))
 	if err != nil || ready.State != entconst.BrainStateReady {

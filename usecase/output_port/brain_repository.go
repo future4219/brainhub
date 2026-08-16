@@ -23,6 +23,7 @@ type MembershipRepository interface {
 type BrainRepositories interface {
 	BrainRepository
 	MembershipRepository
+	BrainWriterClientRepository
 }
 
 type BrainTransactionManager interface {

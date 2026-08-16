@@ -235,7 +235,7 @@ func (u *accessUseCase) IssueClient(ctx context.Context, sourceID entity.SourceI
 		value := client.WriteSourceID.String()
 		source = &value
 	}
-	gbrainClientID, err := u.admin.RegisterClient(ctx, output_port.RegisterGBrainClientInput{
+	registered, err := u.admin.RegisterClient(ctx, output_port.RegisterGBrainClientInput{
 		Name: name, Scopes: client.Scopes, Source: source,
 		FederatedRead: []string{sourceID.String()},
 		GrantTypes:    []string{"authorization_code", "refresh_token"},
@@ -248,6 +248,7 @@ func (u *accessUseCase) IssueClient(ctx context.Context, sourceID entity.SourceI
 		}
 		return orphan, fmt.Errorf("%w: %v", input_port.ErrGBrainAdmin, err)
 	}
+	gbrainClientID := registered.ID
 	if _, err := u.memberships.FindActiveMembership(ctx, brain.ID, userID); err != nil {
 		return u.revokeNewClientAfterMembershipLoss(ctx, client, gbrainClientID, err)
 	}

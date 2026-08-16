@@ -48,7 +48,7 @@ func NewAdminClient(baseURL, bootstrapToken string) (*AdminClient, error) {
 	}, nil
 }
 
-func (c *AdminClient) RegisterClient(ctx context.Context, input output_port.RegisterGBrainClientInput) (string, error) {
+func (c *AdminClient) RegisterClient(ctx context.Context, input output_port.RegisterGBrainClientInput) (output_port.RegisteredGBrainClient, error) {
 	payload := struct {
 		Name                    string   `json:"name"`
 		Scopes                  []string `json:"scopes"`
@@ -63,15 +63,16 @@ func (c *AdminClient) RegisterClient(ctx context.Context, input output_port.Regi
 		RedirectURIs: input.RedirectURIs, TokenEndpointAuthMethod: input.TokenEndpointAuthMethod,
 	}
 	var response struct {
-		ClientID string `json:"clientId"`
+		ClientID     string `json:"clientId"`
+		ClientSecret string `json:"clientSecret"`
 	}
 	if err := c.doJSON(ctx, "/admin/api/register-client", payload, &response); err != nil {
-		return "", err
+		return output_port.RegisteredGBrainClient{}, err
 	}
 	if response.ClientID == "" {
-		return "", errors.New("GBrain register-client response is missing clientId")
+		return output_port.RegisteredGBrainClient{}, errors.New("GBrain register-client response is missing clientId")
 	}
-	return response.ClientID, nil
+	return output_port.RegisteredGBrainClient{ID: response.ClientID, Secret: response.ClientSecret}, nil
 }
 
 func (c *AdminClient) RevokeClient(ctx context.Context, clientID string) error {

@@ -7,6 +7,8 @@ export const appUrl = {
   createBrain: "/brains/new",
   brainDetail: "/brains/:sourceID",
   brainPage: "/brains/:sourceID/pages/*",
+  newPage: "/brains/:sourceID/page-editor/new",
+  editPage: "/brains/:sourceID/page-editor/edit/*",
   invitation: "/invite/:token",
 } as const;
 
@@ -22,6 +24,15 @@ export function invitationUrl(token: string): string {
 export function pageUrl(sourceID: string, slug: string): string {
   const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
   return `/brains/${encodeURIComponent(sourceID)}/pages/${encodedSlug}`;
+}
+
+export function newPageUrl(sourceID: string): string {
+  return `/brains/${encodeURIComponent(sourceID)}/page-editor/new`;
+}
+
+export function editPageUrl(sourceID: string, slug: string): string {
+  const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
+  return `/brains/${encodeURIComponent(sourceID)}/page-editor/edit/${encodedSlug}`;
 }
 
 export function loginUrl(next?: string): string {

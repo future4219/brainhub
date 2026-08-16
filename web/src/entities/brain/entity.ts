@@ -29,7 +29,26 @@ export type Page = {
 export type PageDetail = Page & {
   compiled_truth: string;
   timeline: string;
+  tags: string[];
+  superseded_by: string | null;
 };
+
+export type PageType = {
+  name: string;
+  primitive: string;
+};
+
+export type CreatePageInput = {
+  slug: string;
+  title: string;
+  type: string;
+  tags: string[];
+  superseded_by: string | null;
+  compiled_truth: string;
+  timeline_entry: string;
+};
+
+export type UpdatePageInput = Omit<CreatePageInput, "slug">;
 
 export type PublicConfig = { mcp_url: string };
 

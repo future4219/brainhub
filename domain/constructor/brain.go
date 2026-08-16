@@ -38,12 +38,7 @@ func NewBrainCreate(id string, sourceID entity.SourceID, name, description strin
 }
 
 func NewBrainAdopt(id string, sourceID entity.SourceID, name, description string, visibility entconst.Visibility, ownerID string, now time.Time) (entity.Brain, error) {
-	brain, err := NewBrainCreate(id, sourceID, name, description, visibility, ownerID, now)
-	if err != nil {
-		return entity.Brain{}, err
-	}
-	brain.State = entconst.BrainStateReady
-	return brain, nil
+	return NewBrainCreate(id, sourceID, name, description, visibility, ownerID, now)
 }
 
 func NewOwnerMembership(id, brainID, userID string, now time.Time) entity.Membership {

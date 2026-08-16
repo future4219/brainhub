@@ -12,16 +12,17 @@ import (
 const defaultPublicMCPURL = "http://localhost:8080/mcp"
 
 type Config struct {
-	DatabaseURL        string
-	GBrainBaseURL      string
-	GBrainClientID     string
-	GBrainClientSecret string
-	GBrainAdminToken   string
-	ShimURL            string
-	ShimToken          string
-	PublicMCPURL       string
-	PublicPageTypes    string
-	Production         bool
+	DatabaseURL         string
+	GBrainBaseURL       string
+	GBrainClientID      string
+	GBrainClientSecret  string
+	GBrainAdminToken    string
+	WriterCredentialKey string
+	ShimURL             string
+	ShimToken           string
+	PublicMCPURL        string
+	PublicPageTypes     string
+	Production          bool
 }
 
 func Load() (Config, error) {
@@ -38,22 +39,27 @@ func Load() (Config, error) {
 	if adminToken == "" {
 		return Config{}, errors.New("GBRAIN_ADMIN_BOOTSTRAP_TOKEN is required")
 	}
+	writerCredentialKey := os.Getenv("BRAINHUB_WRITER_CREDENTIAL_KEY")
+	if writerCredentialKey == "" {
+		return Config{}, errors.New("BRAINHUB_WRITER_CREDENTIAL_KEY is required")
+	}
 	shimToken := os.Getenv("SHIM_TOKEN")
 	if shimToken == "" {
 		return Config{}, errors.New("SHIM_TOKEN is required")
 	}
 
 	return Config{
-		DatabaseURL:        databaseURL,
-		GBrainBaseURL:      envOrDefault("GBRAIN_BASE_URL", "http://localhost:3131"),
-		GBrainClientID:     clientID,
-		GBrainClientSecret: clientSecret,
-		GBrainAdminToken:   adminToken,
-		ShimURL:            envOrDefault("BRAINHUB_SHIM_URL", "http://127.0.0.1:8081"),
-		ShimToken:          shimToken,
-		PublicMCPURL:       envOrDefault("PUBLIC_MCP_URL", defaultPublicMCPURL),
-		PublicPageTypes:    envOrDefault("GBRAIN_PUBLIC_PAGE_TYPES", interactor.DefaultPublicPageTypes),
-		Production:         os.Getenv("BRAINHUB_ENV") == "production",
+		DatabaseURL:         databaseURL,
+		GBrainBaseURL:       envOrDefault("GBRAIN_BASE_URL", "http://localhost:3131"),
+		GBrainClientID:      clientID,
+		GBrainClientSecret:  clientSecret,
+		GBrainAdminToken:    adminToken,
+		WriterCredentialKey: writerCredentialKey,
+		ShimURL:             envOrDefault("BRAINHUB_SHIM_URL", "http://127.0.0.1:8081"),
+		ShimToken:           shimToken,
+		PublicMCPURL:        envOrDefault("PUBLIC_MCP_URL", defaultPublicMCPURL),
+		PublicPageTypes:     envOrDefault("GBRAIN_PUBLIC_PAGE_TYPES", interactor.DefaultPublicPageTypes),
+		Production:          os.Getenv("BRAINHUB_ENV") == "production",
 	}, nil
 }
 

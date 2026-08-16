@@ -73,15 +73,15 @@ func TestAdminClientRegistersAndRevokesWithOneRelogin(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := "brainhub"
-	clientID, err := client.RegisterClient(context.Background(), output_port.RegisterGBrainClientInput{
+	registered, err := client.RegisterClient(context.Background(), output_port.RegisterGBrainClientInput{
 		Name: "user-claude-web-issued", Scopes: []string{"read", "write"}, Source: &source,
 		FederatedRead: []string{"brainhub"}, GrantTypes: []string{"authorization_code", "refresh_token"},
 		RedirectURIs: []string{"https://claude.ai/api/mcp/auth_callback"}, TokenEndpointAuthMethod: "none",
 	})
-	if err != nil || clientID != "public-client-id" {
-		t.Fatalf("RegisterClient = %q, %v", clientID, err)
+	if err != nil || registered.ID != "public-client-id" || registered.Secret != "" {
+		t.Fatalf("RegisterClient = %+v, %v", registered, err)
 	}
-	if err := client.RevokeClient(context.Background(), clientID); err != nil {
+	if err := client.RevokeClient(context.Background(), registered.ID); err != nil {
 		t.Fatal(err)
 	}
 	if atomic.LoadInt32(&logins) != 2 || atomic.LoadInt32(&registrations) != 1 {

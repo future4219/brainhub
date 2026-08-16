@@ -28,6 +28,7 @@ type Client struct {
 	httpClient   *http.Client
 	clientID     string
 	clientSecret string
+	scopes       string
 
 	tokenMu       sync.Mutex
 	tokenEndpoint string
@@ -82,8 +83,11 @@ type upstreamPage struct {
 
 type upstreamPageDetail struct {
 	upstreamPage
-	CompiledTruth string `json:"compiled_truth"`
-	Timeline      string `json:"timeline"`
+	CompiledTruth string         `json:"compiled_truth"`
+	Timeline      string         `json:"timeline"`
+	Tags          []string       `json:"tags"`
+	Frontmatter   map[string]any `json:"frontmatter"`
+	ContentHash   string         `json:"content_hash"`
 }
 
 type upstreamSources struct {
@@ -93,6 +97,10 @@ type upstreamSources struct {
 }
 
 func NewClient(baseURL, clientID, clientSecret string) (*Client, error) {
+	return newClient(baseURL, clientID, clientSecret, "read")
+}
+
+func newClient(baseURL, clientID, clientSecret, scopes string) (*Client, error) {
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -106,12 +114,16 @@ func NewClient(baseURL, clientID, clientSecret string) (*Client, error) {
 	if clientID == "" || clientSecret == "" {
 		return nil, errors.New("GBrain OAuth client credentials are required")
 	}
+	if scopes == "" {
+		return nil, errors.New("GBrain OAuth scopes are required")
+	}
 
 	return &Client{
 		baseURL:      parsed,
 		httpClient:   &http.Client{Timeout: 15 * time.Second},
 		clientID:     clientID,
 		clientSecret: clientSecret,
+		scopes:       scopes,
 	}, nil
 }
 
@@ -182,6 +194,8 @@ func (c *Client) Get(ctx context.Context, sourceID entity.SourceID, slug string)
 		},
 		CompiledTruth: page.CompiledTruth,
 		Timeline:      page.Timeline,
+		Tags:          append([]string(nil), page.Tags...),
+		Frontmatter:   page.Frontmatter,
 	}, nil
 }
 
@@ -297,7 +311,7 @@ func (c *Client) token(ctx context.Context) (string, error) {
 
 	form := url.Values{
 		"grant_type":    {"client_credentials"},
-		"scope":         {"read"},
+		"scope":         {c.scopes},
 		"client_id":     {c.clientID},
 		"client_secret": {c.clientSecret},
 	}

@@ -12,7 +12,12 @@ type RegisterGBrainClientInput struct {
 	TokenEndpointAuthMethod string
 }
 
+type RegisteredGBrainClient struct {
+	ID     string
+	Secret string
+}
+
 type GBrainAdmin interface {
-	RegisterClient(context.Context, RegisterGBrainClientInput) (string, error)
+	RegisterClient(context.Context, RegisterGBrainClientInput) (RegisteredGBrainClient, error)
 	RevokeClient(context.Context, string) error
 }

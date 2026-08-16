@@ -157,6 +157,29 @@ export function ConnectSection(props: ConnectSectionProps) {
           </div>
 
           <aside className="w-full shrink-0 space-y-4 lg:sticky lg:top-sticky lg:max-w-credentials">
+            {props.canReissueWriter && (
+              <Panel className="p-4">
+                <h3 className="text-body font-semibold">Web 書き込み用 client</h3>
+                <p className="mt-2 text-ui leading-prose text-text-secondary">
+                  writer が orphan、または暗号鍵を失って復号できない場合に再発行します。
+                </p>
+                <Button
+                  className="mt-4"
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  disabled={props.writerReissuing}
+                  onClick={props.onReissueWriter}
+                >
+                  {props.writerReissuing ? "再発行中…" : "Writer client を再発行"}
+                </Button>
+                {props.writerStatus && (
+                  <p className="mt-3 text-xs leading-prose text-text-secondary">
+                    {props.writerStatus}
+                  </p>
+                )}
+              </Panel>
+            )}
             <Panel>
               <SectionHeading eyebrow="credentials" title="接続情報" />
               <div className="px-4">

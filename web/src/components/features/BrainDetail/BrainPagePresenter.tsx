@@ -6,7 +6,7 @@ import { BrainDetailLayout } from "@/components/features/BrainDetail/BrainDetail
 import { buttonVariants } from "@/components/ui/Button";
 import { Feedback } from "@/components/ui/Feedback";
 import { Panel } from "@/components/ui/Panel";
-import { brainUrl } from "@/config/url";
+import { brainUrl, editPageUrl } from "@/config/url";
 import type { Brain, PageDetail } from "@/entities/brain/entity";
 import type { ViewerState } from "@/entities/user/entity";
 import { formatDate } from "@/lib/format";
@@ -18,6 +18,7 @@ type BrainPagePresenterProps = {
   brainError: "not-found" | "load" | "";
   page: PageDetail | null;
   pageError: "not-found" | "load" | "";
+  canWrite: boolean;
 };
 
 export function BrainPagePresenter({
@@ -27,6 +28,7 @@ export function BrainPagePresenter({
   brainError,
   page,
   pageError,
+  canWrite,
 }: BrainPagePresenterProps) {
   return (
     <BrainDetailLayout
@@ -47,12 +49,22 @@ export function BrainPagePresenter({
       )}
       {page && (
         <article className="mt-6">
-          <Link
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-            to={brainUrl(sourceID)}
-          >
-            ← ページ一覧
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+              to={brainUrl(sourceID)}
+            >
+              ← ページ一覧
+            </Link>
+            {canWrite && (
+              <Link
+                className={buttonVariants({ size: "sm" })}
+                to={editPageUrl(sourceID, page.slug)}
+              >
+                編集
+              </Link>
+            )}
+          </div>
           <header className="mt-6 border-b border-border pb-6">
             <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-text-muted">
               <span>{page.type}</span>

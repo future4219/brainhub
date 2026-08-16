@@ -219,12 +219,12 @@ type accessAdmin struct {
 	revoked       []string
 }
 
-func (a *accessAdmin) RegisterClient(_ context.Context, input output_port.RegisterGBrainClientInput) (string, error) {
+func (a *accessAdmin) RegisterClient(_ context.Context, input output_port.RegisterGBrainClientInput) (output_port.RegisteredGBrainClient, error) {
 	a.registerInput = input
 	if a.registerErr != nil {
-		return "", a.registerErr
+		return output_port.RegisteredGBrainClient{}, a.registerErr
 	}
-	return "gbrain-client-id", nil
+	return output_port.RegisteredGBrainClient{ID: "gbrain-client-id"}, nil
 }
 
 func (a *accessAdmin) RevokeClient(_ context.Context, clientID string) error {

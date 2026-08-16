@@ -67,7 +67,7 @@ func (s *Store) TransitionBrain(ctx context.Context, id string, state entconst.B
 	brain, err := scanBrain(s.queries.QueryRow(ctx, `
 		UPDATE brains
 		SET state = $1, state_reason = $2, updated_at = $3
-		WHERE id = $4 AND state = 'provisioning'
+		WHERE id = $4 AND state IN ('provisioning', 'degraded')
 		RETURNING `+brainColumns,
 		string(state), reason, now, id,
 	))

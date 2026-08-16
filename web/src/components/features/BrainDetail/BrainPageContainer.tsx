@@ -5,7 +5,7 @@ import { BrainPagePresenter } from "@/components/features/BrainDetail/BrainPageP
 import type { Brain, PageDetail } from "@/entities/brain/entity";
 import { useViewer } from "@/hooks/useViewer";
 import { APIError } from "@/lib/api";
-import { getBrain, getPage } from "@/lib/brainApi";
+import { getBrain, getPage, listPageTypes } from "@/lib/brainApi";
 
 export function BrainPageContainer() {
   const { sourceID = "", "*": slug = "" } = useParams<{
@@ -17,6 +17,7 @@ export function BrainPageContainer() {
   const [brainError, setBrainError] = useState<"not-found" | "load" | "">("");
   const [page, setPage] = useState<PageDetail | null>(null);
   const [pageError, setPageError] = useState<"not-found" | "load" | "">("");
+  const [canWrite, setCanWrite] = useState(false);
 
   useEffect(() => {
     document.title = `${page?.title ?? slug} — ${sourceID} — brainhub`;
@@ -50,6 +51,17 @@ export function BrainPageContainer() {
       );
   }, [slug, sourceID]);
 
+  useEffect(() => {
+    if (shell.viewer === undefined) return;
+    if (shell.viewer === null) {
+      setCanWrite(false);
+      return;
+    }
+    void listPageTypes(sourceID)
+      .then(() => setCanWrite(true))
+      .catch(() => setCanWrite(false));
+  }, [shell.viewer, sourceID]);
+
   return (
     <BrainPagePresenter
       shell={shell}
@@ -58,6 +70,7 @@ export function BrainPageContainer() {
       brainError={brainError}
       page={page}
       pageError={pageError}
+      canWrite={canWrite}
     />
   );
 }

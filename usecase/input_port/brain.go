@@ -34,4 +34,5 @@ type BrainUseCase interface {
 	Adopt(context.Context, string, entity.SourceID, AdoptBrainInput) (entity.Brain, error)
 	List(context.Context, string) ([]entity.Brain, error)
 	Get(context.Context, entity.SourceID, string) (entity.Brain, error)
+	ReissueWriter(context.Context, entity.SourceID, string) error
 }

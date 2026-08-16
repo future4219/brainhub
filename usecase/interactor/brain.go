@@ -19,6 +19,7 @@ type brainUseCase struct {
 	transactions output_port.BrainTransactionManager
 	provisioner  output_port.SourceProvisioner
 	sources      output_port.SourceCatalog
+	writer       output_port.BrainWriter
 	clock        output_port.Clock
 	ids          output_port.IDGenerator
 }
@@ -29,10 +30,11 @@ func NewBrainUseCase(
 	transactions output_port.BrainTransactionManager,
 	provisioner output_port.SourceProvisioner,
 	sources output_port.SourceCatalog,
+	writer output_port.BrainWriter,
 	clock output_port.Clock,
 	ids output_port.IDGenerator,
 ) (input_port.BrainUseCase, error) {
-	if brains == nil || memberships == nil || transactions == nil || provisioner == nil || sources == nil || clock == nil || ids == nil {
+	if brains == nil || memberships == nil || transactions == nil || provisioner == nil || sources == nil || writer == nil || clock == nil || ids == nil {
 		return nil, errors.New("all brain dependencies are required")
 	}
 	return &brainUseCase{
@@ -41,6 +43,7 @@ func NewBrainUseCase(
 		transactions: transactions,
 		provisioner:  provisioner,
 		sources:      sources,
+		writer:       writer,
 		clock:        clock,
 		ids:          ids,
 	}, nil
@@ -73,6 +76,13 @@ func (u *brainUseCase) Create(ctx context.Context, ownerID string, input input_p
 			return failed, input_port.ErrBrainAlreadyExists
 		}
 		return failed, fmt.Errorf("%w: %v", input_port.ErrProvisioningFailed, err)
+	}
+	if err := u.writer.Provision(ctx, brain.ID, sourceID); err != nil {
+		degraded, transitionErr := u.brains.TransitionBrain(ctx, brain.ID, entconst.BrainStateDegraded, "writer client: "+err.Error(), u.clock.Now())
+		if transitionErr != nil {
+			return brain, fmt.Errorf("mark degraded brain after writer error: %w", transitionErr)
+		}
+		return degraded, fmt.Errorf("%w: %v", input_port.ErrProvisioningFailed, err)
 	}
 
 	ready, err := u.brains.TransitionBrain(ctx, brain.ID, entconst.BrainStateReady, "", u.clock.Now())
@@ -107,17 +117,60 @@ func (u *brainUseCase) Adopt(ctx context.Context, ownerID string, sourceID entit
 	} else if err != nil {
 		return entity.Brain{}, fmt.Errorf("create adopted brain records: %w", err)
 	}
-	return brain, nil
+	if err := u.writer.Provision(ctx, brain.ID, sourceID); err != nil {
+		degraded, transitionErr := u.brains.TransitionBrain(ctx, brain.ID, entconst.BrainStateDegraded, "writer client: "+err.Error(), u.clock.Now())
+		if transitionErr != nil {
+			return brain, fmt.Errorf("mark degraded adopted brain after writer error: %w", transitionErr)
+		}
+		return degraded, fmt.Errorf("%w: %v", input_port.ErrProvisioningFailed, err)
+	}
+	ready, err := u.brains.TransitionBrain(ctx, brain.ID, entconst.BrainStateReady, "", u.clock.Now())
+	if err != nil {
+		return brain, fmt.Errorf("mark adopted brain ready: %w", err)
+	}
+	return ready, nil
 }
 
 func (u *brainUseCase) createRecords(ctx context.Context, brain entity.Brain, now time.Time) error {
 	membership := constructor.NewOwnerMembership(u.ids.New(), brain.ID, brain.OwnerID, now)
+	writer := entity.BrainWriterClient{
+		BrainID: brain.ID, WriteSourceID: brain.SourceID, State: entity.WriterClientStateIssuing,
+	}
 	return u.transactions.WithinBrainTransaction(ctx, func(repositories output_port.BrainRepositories) error {
 		if err := repositories.CreateBrain(ctx, brain); err != nil {
 			return err
 		}
-		return repositories.CreateMembership(ctx, membership)
+		if err := repositories.CreateMembership(ctx, membership); err != nil {
+			return err
+		}
+		return repositories.CreateBrainWriterClient(ctx, writer)
 	})
+}
+
+func (u *brainUseCase) ReissueWriter(ctx context.Context, sourceID entity.SourceID, userID string) error {
+	brain, err := u.brains.FindBrainBySourceID(ctx, sourceID)
+	if errors.Is(err, output_port.ErrNotFound) {
+		return input_port.ErrBrainNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("find brain: %w", err)
+	}
+	memberships, err := u.memberships.ListActiveMembershipsByUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("list memberships: %w", err)
+	}
+	for _, membership := range memberships {
+		if membership.BrainID == brain.ID && membership.Role == entity.RoleOwner {
+			if err := u.writer.Reissue(ctx, brain.ID, sourceID); err != nil {
+				return fmt.Errorf("reissue writer client: %w", err)
+			}
+			if brain.State == entconst.BrainStateDegraded {
+				_, err = u.brains.TransitionBrain(ctx, brain.ID, entconst.BrainStateReady, "", u.clock.Now())
+			}
+			return err
+		}
+	}
+	return input_port.ErrForbidden
 }
 
 func (u *brainUseCase) List(ctx context.Context, viewerID string) ([]entity.Brain, error) {
