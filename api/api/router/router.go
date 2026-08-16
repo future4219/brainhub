@@ -22,6 +22,7 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	mux.Handle("POST /api/brains/{sourceID}/adopt", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Adopt)))
 	mux.Handle("GET /api/brains/{sourceID}", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.Get)))
 	mux.Handle("GET /api/brains/{sourceID}/pages", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.List)))
+	mux.Handle("GET /api/brains/{sourceID}/pages/{slug...}", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.Get)))
 	mux.Handle("POST /api/brains/{sourceID}/invitations", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.CreateInvitation)))
 	mux.Handle("GET /api/brains/{sourceID}/invitations", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.ListInvitations)))
 	mux.Handle("POST /api/brains/{sourceID}/clients", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.IssueClient)))

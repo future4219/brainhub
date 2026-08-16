@@ -25,7 +25,7 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 |---|---|---|
 | `list_pages` | ページ一覧 | `GET /api/brains/{id}/pages` |
 | `sources_list` | source の実在確認 | `POST /api/brains/{id}/adopt` |
-| `get_page` | 単体取得 | 編集画面（未実装） |
+| `get_page` | 単体取得 | `GET /api/brains/{id}/pages/{slug...}`、個別ページ閲覧 |
 | `put_page` | 書き込み | 編集画面（未実装） |
 
 ### OAuth 2.1

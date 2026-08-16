@@ -6,6 +6,7 @@ export const appUrl = {
   register: "/register",
   createBrain: "/brains/new",
   brainDetail: "/brains/:sourceID",
+  brainPage: "/brains/:sourceID/pages/*",
   invitation: "/invite/:token",
 } as const;
 
@@ -16,6 +17,11 @@ export function brainUrl(sourceID: string, tab: BrainTab = "pages"): string {
 
 export function invitationUrl(token: string): string {
   return `/invite/${encodeURIComponent(token)}`;
+}
+
+export function pageUrl(sourceID: string, slug: string): string {
+  const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
+  return `/brains/${encodeURIComponent(sourceID)}/pages/${encodedSlug}`;
 }
 
 export function loginUrl(next?: string): string {

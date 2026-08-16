@@ -99,13 +99,24 @@ func (s *sourceCatalogMock) Exists(_ context.Context, sourceID entity.SourceID) 
 }
 
 type pagesMock struct {
-	called bool
-	pages  []entity.Page
+	called  bool
+	pages   []entity.Page
+	details []entity.PageDetail
 }
 
 func (p *pagesMock) List(context.Context, entity.SourceID) ([]entity.Page, error) {
 	p.called = true
 	return p.pages, nil
+}
+
+func (p *pagesMock) Get(_ context.Context, _ entity.SourceID, slug string) (entity.PageDetail, error) {
+	p.called = true
+	for _, page := range p.details {
+		if page.Slug == slug {
+			return page, nil
+		}
+	}
+	return entity.PageDetail{}, output_port.ErrNotFound
 }
 
 func TestBrainCreateStateMachine(t *testing.T) {
@@ -272,5 +283,16 @@ func TestPageAccessIsCheckedBeforeGBrain(t *testing.T) {
 	visible, err := useCase.List(context.Background(), "private", "reader")
 	if err != nil || len(visible) != 1 || visible[0].Slug != "allowed" {
 		t.Fatalf("visible pages = %+v %v", visible, err)
+	}
+	pages.details = []entity.PageDetail{
+		{Page: entity.Page{Slug: "allowed", Type: "decision"}, CompiledTruth: "body"},
+		{Page: entity.Page{Slug: "internal", Type: "extract_receipt"}, CompiledTruth: "secret"},
+	}
+	detail, err := useCase.Get(context.Background(), "private", "allowed", "reader")
+	if err != nil || detail.CompiledTruth != "body" {
+		t.Fatalf("page detail = %+v %v", detail, err)
+	}
+	if _, err := useCase.Get(context.Background(), "private", "internal", "reader"); !errors.Is(err, input_port.ErrPageNotFound) {
+		t.Fatalf("internal page error = %v", err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"brainhub/domain/entity"
+	"brainhub/usecase/output_port"
 )
 
 const (
@@ -63,6 +64,7 @@ type rpcResponse struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
+		IsError bool `json:"isError"`
 	} `json:"result"`
 	Error *struct {
 		Code    int    `json:"code"`
@@ -76,6 +78,12 @@ type upstreamPage struct {
 	Type      string    `json:"type"`
 	Title     string    `json:"title"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type upstreamPageDetail struct {
+	upstreamPage
+	CompiledTruth string `json:"compiled_truth"`
+	Timeline      string `json:"timeline"`
 }
 
 type upstreamSources struct {
@@ -129,6 +137,52 @@ func (c *Client) List(ctx context.Context, sourceID entity.SourceID) ([]entity.P
 			return pages, nil
 		}
 	}
+}
+
+func (c *Client) Get(ctx context.Context, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
+	response, err := c.callTool(ctx, 1, "get_page", map[string]any{"slug": slug})
+	if err != nil {
+		return entity.PageDetail{}, err
+	}
+	if response.Error != nil {
+		return entity.PageDetail{}, fmt.Errorf("GBrain get_page failed: %s", response.Error.Message)
+	}
+	if response.Result == nil || len(response.Result.Content) == 0 {
+		return entity.PageDetail{}, errors.New("GBrain get_page returned no content")
+	}
+
+	content := response.Result.Content[0].Text
+	if response.Result.IsError {
+		var upstreamError struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal([]byte(content), &upstreamError); err != nil {
+			return entity.PageDetail{}, fmt.Errorf("decode GBrain get_page error: %w", err)
+		}
+		if upstreamError.Error == "page_not_found" {
+			return entity.PageDetail{}, output_port.ErrNotFound
+		}
+		return entity.PageDetail{}, fmt.Errorf("GBrain get_page failed: %s", upstreamError.Message)
+	}
+
+	var page upstreamPageDetail
+	if err := json.Unmarshal([]byte(content), &page); err != nil {
+		return entity.PageDetail{}, fmt.Errorf("decode GBrain page: %w", err)
+	}
+	if page.SourceID != sourceID.String() {
+		return entity.PageDetail{}, output_port.ErrNotFound
+	}
+	return entity.PageDetail{
+		Page: entity.Page{
+			Slug:      page.Slug,
+			Title:     page.Title,
+			Type:      page.Type,
+			UpdatedAt: page.UpdatedAt,
+		},
+		CompiledTruth: page.CompiledTruth,
+		Timeline:      page.Timeline,
+	}, nil
 }
 
 func (c *Client) Exists(ctx context.Context, sourceID entity.SourceID) (bool, error) {

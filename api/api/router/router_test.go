@@ -30,6 +30,19 @@ func (r *pageUseCase) List(_ context.Context, sourceID entity.SourceID, _ string
 	return r.pages, nil
 }
 
+func (r *pageUseCase) Get(_ context.Context, sourceID entity.SourceID, slug, _ string) (entity.PageDetail, error) {
+	r.sourceID = sourceID
+	if sourceID != "brainhub" {
+		return entity.PageDetail{}, input_port.ErrBrainNotFound
+	}
+	for _, page := range r.pages {
+		if page.Slug == slug {
+			return entity.PageDetail{Page: page, CompiledTruth: "# Public\n\nBody", Timeline: "- 2026-08-15: Created"}, nil
+		}
+	}
+	return entity.PageDetail{}, input_port.ErrPageNotFound
+}
+
 type brainUseCase struct {
 	brains []entity.Brain
 }
@@ -254,6 +267,32 @@ func TestRoutes(t *testing.T) {
 			if len(page) != 4 {
 				t.Errorf("page fields = %v; want exactly four", page)
 			}
+		}
+	})
+
+	t.Run("page detail", func(t *testing.T) {
+		response, err := http.Get(server.URL + "/api/brains/brainhub/pages/decisions/public")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusOK || body["slug"] != "decisions/public" || body["compiled_truth"] != "# Public\n\nBody" {
+			t.Fatalf("status/page = %d %v", response.StatusCode, body)
+		}
+	})
+
+	t.Run("missing page", func(t *testing.T) {
+		response, err := http.Get(server.URL + "/api/brains/brainhub/pages/missing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d; want 404", response.StatusCode)
 		}
 	})
 

@@ -2,6 +2,7 @@ import type {
   Brain,
   CreateBrainInput,
   Page,
+  PageDetail,
   PublicConfig,
 } from "@/entities/brain/entity";
 import { postJSON, requestJSON } from "@/lib/api";
@@ -16,6 +17,13 @@ export function getBrain(sourceID: string): Promise<Brain> {
 
 export function listPages(sourceID: string): Promise<Page[]> {
   return requestJSON(`/brains/${encodeURIComponent(sourceID)}/pages`);
+}
+
+export function getPage(sourceID: string, slug: string): Promise<PageDetail> {
+  const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
+  return requestJSON(
+    `/brains/${encodeURIComponent(sourceID)}/pages/${encodedSlug}`,
+  );
 }
 
 export function getPublicConfig(): Promise<PublicConfig> {

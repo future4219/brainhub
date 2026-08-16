@@ -26,6 +26,11 @@ export type Page = {
   updated_at: string;
 };
 
+export type PageDetail = Page & {
+  compiled_truth: string;
+  timeline: string;
+};
+
 export type PublicConfig = { mcp_url: string };
 
 export type CreateBrainInput = Pick<

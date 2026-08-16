@@ -49,29 +49,8 @@ func NewPageUseCase(
 }
 
 func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID, viewerID string) ([]entity.Page, error) {
-	brain, err := u.brains.FindBrainBySourceID(ctx, sourceID)
-	if errors.Is(err, output_port.ErrNotFound) {
-		return nil, input_port.ErrBrainNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("find brain: %w", err)
-	}
-
-	role := entity.Role("")
-	if viewerID != "" {
-		memberships, err := u.memberships.ListActiveMembershipsByUser(ctx, viewerID)
-		if err != nil {
-			return nil, fmt.Errorf("list viewer memberships: %w", err)
-		}
-		for _, membership := range memberships {
-			if membership.BrainID == brain.ID {
-				role = membership.Role
-				break
-			}
-		}
-	}
-	if !canReadBrain(brain, role) {
-		return nil, input_port.ErrBrainNotFound
+	if err := u.requireReadAccess(ctx, sourceID, viewerID); err != nil {
+		return nil, err
 	}
 
 	pages, err := u.pageRepository.List(ctx, sourceID)
@@ -86,4 +65,49 @@ func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID, viewer
 		}
 	}
 	return public, nil
+}
+
+func (u *pageUseCase) Get(ctx context.Context, sourceID entity.SourceID, slug, viewerID string) (entity.PageDetail, error) {
+	if err := u.requireReadAccess(ctx, sourceID, viewerID); err != nil {
+		return entity.PageDetail{}, err
+	}
+	page, err := u.pageRepository.Get(ctx, sourceID, slug)
+	if errors.Is(err, output_port.ErrNotFound) {
+		return entity.PageDetail{}, input_port.ErrPageNotFound
+	}
+	if err != nil {
+		return entity.PageDetail{}, err
+	}
+	if _, ok := u.allowed[page.Type]; !ok {
+		return entity.PageDetail{}, input_port.ErrPageNotFound
+	}
+	return page, nil
+}
+
+func (u *pageUseCase) requireReadAccess(ctx context.Context, sourceID entity.SourceID, viewerID string) error {
+	brain, err := u.brains.FindBrainBySourceID(ctx, sourceID)
+	if errors.Is(err, output_port.ErrNotFound) {
+		return input_port.ErrBrainNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("find brain: %w", err)
+	}
+
+	role := entity.Role("")
+	if viewerID != "" {
+		memberships, err := u.memberships.ListActiveMembershipsByUser(ctx, viewerID)
+		if err != nil {
+			return fmt.Errorf("list viewer memberships: %w", err)
+		}
+		for _, membership := range memberships {
+			if membership.BrainID == brain.ID {
+				role = membership.Role
+				break
+			}
+		}
+	}
+	if !canReadBrain(brain, role) {
+		return input_port.ErrBrainNotFound
+	}
+	return nil
 }

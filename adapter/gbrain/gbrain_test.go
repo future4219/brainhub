@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"brainhub/domain/entity"
+	"brainhub/usecase/output_port"
 )
 
 func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
@@ -193,6 +195,63 @@ func TestClientChecksSourceExistence(t *testing.T) {
 		got, err := client.Exists(context.Background(), test.sourceID)
 		if err != nil || got != test.want {
 			t.Fatalf("Exists(%q) = %v, %v; want %v", test.sourceID, got, err, test.want)
+		}
+	}
+}
+
+func TestClientGetsPageWithinRequestedSource(t *testing.T) {
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/oauth-authorization-server":
+			_ = json.NewEncoder(w).Encode(map[string]string{"token_endpoint": upstream.URL + "/token"})
+		case "/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "token", "expires_in": 3600})
+		case "/mcp":
+			var request rpcRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			if request.Params.Name != "get_page" || len(request.Params.Arguments) != 1 {
+				t.Errorf("tool/arguments = %q %v", request.Params.Name, request.Params.Arguments)
+			}
+			slug, _ := request.Params.Arguments["slug"].(string)
+			result := map[string]any{"content": []map[string]string{}}
+			if slug == "missing" {
+				text, _ := json.Marshal(map[string]string{"error": "page_not_found", "message": "Page not found: missing"})
+				result["content"] = []map[string]string{{"type": "text", "text": string(text)}}
+				result["isError"] = true
+			} else {
+				sourceID := "brainhub"
+				if slug == "other" {
+					sourceID = "other"
+				}
+				text, _ := json.Marshal(map[string]any{
+					"slug": slug, "source_id": sourceID, "type": "decision", "title": "Public",
+					"updated_at": "2026-08-15T00:00:00Z", "compiled_truth": "# Public", "timeline": "- Created",
+				})
+				result["content"] = []map[string]string{{"type": "text", "text": string(text)}}
+			}
+			envelope, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": result})
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprintf(w, "event: message\ndata: %s\n\n", envelope)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	client, err := NewClient(upstream.URL, "client-id", "client-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := client.Get(context.Background(), "brainhub", "decisions/public")
+	if err != nil || page.CompiledTruth != "# Public" || page.Timeline != "- Created" {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+	for _, slug := range []string{"other", "missing"} {
+		if _, err := client.Get(context.Background(), "brainhub", slug); !errors.Is(err, output_port.ErrNotFound) {
+			t.Errorf("Get(%q) error = %v; want not found", slug, err)
 		}
 	}
 }
