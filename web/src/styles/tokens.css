@@ -104,8 +104,8 @@
   --bh-color-failed-text: #e5a79e;
   --bh-color-failed-dot: #b06a5e;
 
-  --bh-font-sans: "IBM Plex Sans JP", "Helvetica Neue", sans-serif;
-  --bh-font-mono: "IBM Plex Mono", monospace;
+  --bh-font-sans: -apple-system, "Helvetica Neue", "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+  --bh-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --bh-text-11: 0.6875rem;
   --bh-text-12: 0.75rem;
   --bh-text-13: 0.8125rem;
