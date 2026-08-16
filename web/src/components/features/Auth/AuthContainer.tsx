@@ -36,7 +36,7 @@ export function AuthContainer({ mode }: { mode: AuthMode }) {
     setError("");
     try {
       if (isRegister) await register(input);
-      else await login(input);
+      else await login({ email: input.email, password: input.password });
       navigate(next, { replace: true });
     } catch (cause) {
       setError(authErrorMessage(cause, mode));
