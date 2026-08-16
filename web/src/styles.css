@@ -10,7 +10,6 @@
     color: var(--bh-color-text);
     background: var(--bh-color-canvas);
     font-family: var(--bh-font-sans);
-    font-size: var(--bh-text-14);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
