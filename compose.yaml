@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: gbrain
       POSTGRES_USER: gbrain
       POSTGRES_PASSWORD: ${GBRAIN_POSTGRES_PASSWORD:?GBRAIN_POSTGRES_PASSWORD must be set}
-    ports:
-      - "127.0.0.1:55433:5432"
     volumes:
       - /home/futur/dev/brainhub-data/pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +16,7 @@ services:
       retries: 15
 
   gbrain:
-    image: brainhub-gbrain:v0.45.12.0
+    image: brainhub-gbrain:v0.45.18.0
     container_name: brainhub-gbrain
     restart: unless-stopped
     build:
@@ -33,12 +31,22 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY must be set}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}
       GBRAIN_SKILLS_DIR: /home/bun/.bun/install/global/node_modules/gbrain/skills
-    command: ["gbrain", "serve", "--http", "--bind", "0.0.0.0", "--port", "3131"]
-    ports:
-      - "127.0.0.1:3131:3131"
+      GBRAIN_ADMIN_BOOTSTRAP_TOKEN: ${GBRAIN_ADMIN_BOOTSTRAP_TOKEN}
+    command:
+      - gbrain
+      - serve
+      - --http
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "3131"
+      - --public-url
+      - https://numerical-homeland-ash-payroll.trycloudflare.com
+      - ${GBRAIN_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
       - /home/futur/dev/brainhub-data/brains/default:/brain
+      - /home/futur/dev/brainhub-data/brains:/brains
     healthcheck:
       test:
         - CMD
@@ -49,8 +57,30 @@ services:
       timeout: 3s
       retries: 12
 
+  shim:
+    image: brainhub-gbrain-shim:v0.45.12.0
+    container_name: brainhub-gbrain-shim
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/shim/Dockerfile
+      additional_contexts:
+        gbrain: service:gbrain
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOME: /var/lib/gbrain-home
+      USER: bun
+      LANG: C.UTF-8
+      TZ: Asia/Tokyo
+      SHIM_TOKEN: ${SHIM_TOKEN:?SHIM_TOKEN must be set}
+    volumes:
+      - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
+      - /home/futur/dev/brainhub-data/brains:/brains
+
   autopilot:
-    image: brainhub-gbrain:v0.45.12.0
+    image: brainhub-gbrain:v0.45.18.0
     container_name: brainhub-gbrain-autopilot
     restart: unless-stopped
     depends_on:
@@ -68,3 +98,65 @@ services:
     volumes:
       - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
       - /home/futur/dev/brainhub-data/brains/default:/brain
+
+  brainhub:
+    image: brainhub-api:local
+    container_name: brainhub-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/brainhub/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gbrain:
+        condition: service_healthy
+      shim:
+        condition: service_started
+    environment:
+      BRAINHUB_DATABASE_URL: ${BRAINHUB_DATABASE_URL:?BRAINHUB_DATABASE_URL must be set}
+      BRAINHUB_GBRAIN_CLIENT_ID: ${BRAINHUB_GBRAIN_CLIENT_ID:?BRAINHUB_GBRAIN_CLIENT_ID must be set}
+      BRAINHUB_GBRAIN_CLIENT_SECRET: ${BRAINHUB_GBRAIN_CLIENT_SECRET:?BRAINHUB_GBRAIN_CLIENT_SECRET must be set}
+      GBRAIN_ADMIN_BOOTSTRAP_TOKEN: ${GBRAIN_ADMIN_BOOTSTRAP_TOKEN:?GBRAIN_ADMIN_BOOTSTRAP_TOKEN must be set}
+      GBRAIN_BASE_URL: http://gbrain:3131
+      BRAINHUB_SHIM_URL: http://shim:8081
+      SHIM_TOKEN: ${SHIM_TOKEN:?SHIM_TOKEN must be set}
+      PUBLIC_MCP_URL: ${PUBLIC_MCP_URL:-http://localhost:8080/mcp}
+      BRAINHUB_ENV: ${BRAINHUB_ENV:-}
+      GBRAIN_PUBLIC_PAGE_TYPES: ${GBRAIN_PUBLIC_PAGE_TYPES:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          ignore:
+            - web/
+            - docs/
+            - docker/gbrain/
+            - docker/shim/
+            - docker/web/
+            - README.md
+
+  web:
+    image: brainhub-web:local
+    container_name: brainhub-web
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    depends_on:
+      brainhub:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

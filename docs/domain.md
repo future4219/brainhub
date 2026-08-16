@@ -185,14 +185,15 @@ func (r Role) GBrainScopes() []string {
 type Invitation struct {
     ID        string
     BrainID   string
-    Email     string      // まだ User でない相手を招待できる
+	Email     *string     // NULL なら誰でも受諾できる
     Role      Role
     TokenHash string      // 平文は保存しない
     InvitedBy string
     State     InvitationState
     ExpiresAt time.Time
     CreatedAt time.Time
-    AcceptedAt *time.Time
+	AcceptedAt *time.Time
+	AcceptedBy *string
 }
 
 type InvitationState string
@@ -221,12 +222,13 @@ type IssuedClient struct {
     ID             string
     UserID         string
     BrainID        string
-    GBrainClientID string      // GBrain の client_id
+    GBrainClientID *string     // issuing 中や発行失敗時はまだ存在しない（DBもNULL可）
     Label          string      // "codex", "claude-desktop" 等
-    WriteSourceID  SourceID    // GBrain の --source
+	WriteSourceID  *SourceID   // reader は書き込み先を持たない
     ReadSourceIDs  []SourceID  // GBrain の --federated-read
     Scopes         []string
-    State          ClientState
+	State          ClientState
+    StateReason    string      // 外部発行・失効の失敗理由（DBのstate_reason）
     IssuedAt       time.Time
     LastVerifiedAt *time.Time  // GBrain 側に実在することを最後に確認した時刻
     RevokedAt      *time.Time
@@ -242,7 +244,9 @@ const (
 )
 ```
 
-**secret は保存しない。** 発行時に一度だけ返し、以後は再表示できない。GBrain が保持する。
+**secret は保存しない。** confidential clientで返る場合も保持しない。現在発行する `token_endpoint_auth_method=none` のpublic clientにはsecret自体がない。
+
+`GBrainClientID` をnullableにするのは、`issuing` 行を先にコミットしてからGBrainへ発行要求するためである。発行失敗時はclient IDが無いまま `orphan` になり、失敗理由は `StateReason` に残る。
 
 **`LastVerifiedAt` を持つ理由。** GBrain の `auth list` と突き合わせて、記録に無いクライアントや失効済みのはずのクライアントを検出するため。これが無いと、上に挙げた「所有者不明の有効な鍵」を見つける手段が無い。
 

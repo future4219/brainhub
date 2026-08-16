@@ -12,5 +12,7 @@ type SessionRepository interface {
 	Create(ctx context.Context, userID string, expiresAt time.Time) (entity.Session, string, error)
 	Verify(ctx context.Context, rawToken string) (entity.Session, error)
 	Revoke(ctx context.Context, sessionID string) error
+	// RevokeAllByUser is intentionally retained for the future user-suspension
+	// entry point, which must revoke sessions and issued GBrain clients together.
 	RevokeAllByUser(ctx context.Context, userID string) error
 }
