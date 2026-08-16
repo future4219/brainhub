@@ -1,4 +1,6 @@
+import Markdown from "react-markdown";
 import { Link } from "react-router-dom";
+import remarkGfm from "remark-gfm";
 
 import { BrainDetailLayout } from "@/components/features/BrainDetail/BrainDetailLayout";
 import { buttonVariants } from "@/components/ui/Button";
@@ -63,9 +65,7 @@ export function BrainPagePresenter({
           </header>
           <Panel className="mt-6 overflow-hidden">
             {page.compiled_truth ? (
-              <pre className="whitespace-pre-wrap break-words p-6 font-sans text-body leading-prose text-text-secondary">
-                {page.compiled_truth}
-              </pre>
+              <MarkdownPreview>{page.compiled_truth}</MarkdownPreview>
             ) : (
               <Feedback kind="empty">本文がありません。</Feedback>
             )}
@@ -75,13 +75,19 @@ export function BrainPagePresenter({
               <h3 className="border-b border-border px-6 py-3 font-mono text-xs uppercase tracking-label text-text-muted">
                 timeline
               </h3>
-              <pre className="whitespace-pre-wrap break-words p-6 font-sans text-body leading-prose text-text-secondary">
-                {page.timeline}
-              </pre>
+              <MarkdownPreview>{page.timeline}</MarkdownPreview>
             </Panel>
           )}
         </article>
       )}
     </BrainDetailLayout>
+  );
+}
+
+function MarkdownPreview({ children }: { children: string }) {
+  return (
+    <div className="markdown-preview">
+      <Markdown remarkPlugins={[remarkGfm]}>{children}</Markdown>
+    </div>
   );
 }
