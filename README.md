@@ -90,7 +90,7 @@ runtime 分離が必要になるのは、他者のデータを同一 DB に置�
 - **GBrain** — 知識基盤（`v0.45.12.0` にタグ固定）
 - **Postgres + pgvector** — GBrain の索引・ベクトル
 
-設計指針は [`docs/architecture-guide.md`](docs/architecture-guide.md)（Clean Architecture）。ただし目標形であって初期構成ではない。掟 1 に従い、不要なディレクトリは作らない。
+Go の設計指針は [`docs/architecture-guide.md`](docs/architecture-guide.md)、フロントエンドの配置と実装規約は [`docs/frontend-guide.md`](docs/frontend-guide.md)。どちらも目標形であって、掟 1 に従い不要なディレクトリは作らない。
 
 ## セットアップ
 

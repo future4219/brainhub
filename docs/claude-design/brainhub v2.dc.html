@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #171614; }
+  body { color: #eae6e0; font-family: "IBM Plex Sans JP", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: #eae6e0; text-decoration: none; }
+  a:hover { color: #ffffff; text-decoration: underline; }
+  button, input { font-family: inherit; color: inherit; }
+  input::placeholder { color: #7d766d; }
+  :focus-visible { outline: 2px solid #8d857b; outline-offset: 2px; }
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; background: #171614">
+
+  <!-- ── サイドバー ───────────────────────────── -->
+  <div style="flex: none; width: 236px; border-right: 1px solid #2b2825; background: #1c1a18; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh">
+    <div style="padding: 16px 16px 12px; display: flex; align-items: center; gap: 10px">
+      <span style="flex: none; width: 24px; height: 24px; border-radius: 5px; background: #eae6e0; color: #171614; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center">bh</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; letter-spacing: -0.01em">brainhub</span>
+    </div>
+
+    <div style="padding: 6px 10px">
+      <sc-for list="{{ sideNav }}" as="n" hint-placeholder-count="4">
+        <button onClick="{{ n.go }}" style="{{ n.style }}">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; opacity: 0.7; width: 14px">{{ n.mark }}</span>
+          <span style="flex: 1; text-align: left">{{ n.label }}</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; opacity: 0.65">{{ n.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="padding: 18px 20px 8px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7d766d">brains</div>
+    <div style="padding: 0 10px">
+      <sc-for list="{{ recents }}" as="r" hint-placeholder-count="2">
+        <button onClick="{{ r.go }}" style="{{ r.style }}">
+          <span style="{{ r.dot }}"></span>
+          <span style="flex: 1; text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.name }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="flex: 1"></div>
+    <div style="padding: 10px">
+      <button style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; cursor: pointer; text-align: left" style-hover="border-color: #45403a; background: #262320">
+        <span style="flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #45403a; background: #262320"></span>
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 13px; font-weight: 600; line-height: 1.3">kudo</span>
+          <span style="display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #8d857b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">personal · free</span>
+        </span>
+        <span style="flex: none; font-size: 10px; color: #8d857b">▾</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── メイン ──────────────────────────────── -->
+  <div style="flex: 1; min-width: 0">
+
+    <div style="position: sticky; top: 0; z-index: 20; height: 52px; padding: 0 28px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #2b2825; background: rgba(23,22,20,0.92); backdrop-filter: blur(8px)">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #8d857b; display: flex; align-items: center; gap: 8px">
+        <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="2">
+          <span style="{{ c.style }}">{{ c.label }}</span>
+        </sc-for>
+      </div>
+      <div style="flex: 1"></div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 30px; width: 240px; border: 1px solid #332f2b; border-radius: 6px; background: #1c1a18">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #7d766d">/</span>
+        <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="ページを検索" style="flex: 1; min-width: 0; border: none; background: transparent; font-size: 12.5px; outline: none" />
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #7d766d; border: 1px solid #332f2b; border-radius: 4px; padding: 1px 5px">⌘K</span>
+      </div>
+      <button style="height: 30px; padding: 0 13px; border: none; border-radius: 6px; background: #eae6e0; color: #171614; font-size: 12.5px; font-weight: 600; cursor: pointer" style-hover="background: #ffffff">新しい脳</button>
+    </div>
+
+    <!-- 1. 脳の一覧 -->
+    <sc-if value="{{ isTop }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width: 1120px; margin: 0 auto; padding: 32px 28px 80px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px">
+          <div>
+            <h1 style="margin: 0 0 6px; font-size: 21px; font-weight: 600; letter-spacing: -0.01em">脳</h1>
+            <p style="margin: 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 560px">領域ごとの知識ベース。接続情報を AI クライアントに渡すと、そのクライアントが中身を読めるようになる。</p>
+          </div>
+          <div style="flex: none; display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-size: 12.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">インポート</button>
+          </div>
+        </div>
+
+        <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #2b2825">
+            <sc-for list="{{ visFilters }}" as="v" hint-placeholder-count="3">
+              <button onClick="{{ v.select }}" style="{{ v.style }}">{{ v.label }}</button>
+            </sc-for>
+            <div style="flex: 1"></div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #8d857b">{{ brainCountLine }}</span>
+          </div>
+
+          <div style="overflow-x: auto">
+          <div style="display: grid; grid-template-columns: minmax(140px, 190px) minmax(120px, 1fr) 64px 96px 100px; gap: 0 16px; min-width: 640px; padding: 9px 16px; background: #201e1b; border-bottom: 1px solid #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d">
+            <div>name</div><div>signature</div><div style="text-align: right">pages</div><div>updated</div><div>state</div>
+          </div>
+
+          <sc-for list="{{ brains }}" as="b" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: minmax(140px, 190px) minmax(120px, 1fr) 64px 96px 100px; gap: 0 16px; min-width: 640px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #232120" style-hover="background: #211f1c">
+              <div style="min-width: 0">
+                <a href="#" onClick="{{ b.open }}" style="font-family: 'IBM Plex Mono', monospace; font-size: 13.5px; font-weight: 500">{{ b.name }}</a>
+                <div style="margin-top: 4px; display: flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b">
+                  <span style="{{ b.lockStyle }}">{{ b.visibility }}</span>
+                </div>
+              </div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #8d857b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ b.signature }}</div>
+              <div style="text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 13px">{{ b.pages }}</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #8d857b">{{ b.updated }}</div>
+              <div style="min-width: 0"><span style="{{ b.badgeStyle }}"><span style="{{ b.dotStyle }}"></span>{{ b.stateLabel }}</span></div>
+            </div>
+          </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- 2. 脳の詳細 -->
+    <sc-if value="{{ isDetail }}">
+      <div style="max-width: 1120px; margin: 0 auto; padding: 28px 28px 80px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h1 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">kudo / brainhub</h1>
+              <span style="padding: 2px 8px; border: 1px solid #45403a; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #a39a8f">public</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #3d5642; border-radius: 4px; background: #223025; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9ecfae"><span style="width: 5px; height: 5px; border-radius: 50%; background: #6faa80"></span>[ready]</span>
+            </div>
+            <p style="margin: 10px 0 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 600px">brainhub 自身の設計判断・調査・アイデアを置いている脳。決定は decision、未確定は idea。</p>
+          </div>
+          <div style="flex: none; display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-size: 12.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">招待</button>
+            <button onClick="{{ goConnectTab }}" style="height: 32px; padding: 0 14px; border: none; border-radius: 6px; background: #eae6e0; color: #171614; font-size: 12.5px; font-weight: 600; cursor: pointer" style-hover="background: #ffffff">この脳に繋ぐ</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 2px; margin: 22px 0 0; border-bottom: 1px solid #2b2825">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.select }}" style="{{ t.style }}">{{ t.label }}<span style="{{ t.countStyle }}">{{ t.count }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 28px; padding-top: 24px; align-items: flex-start">
+          <div style="flex: 0 1 250px; position: sticky; top: 76px">
+            <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+              <div style="padding: 10px 14px; border-bottom: 1px solid #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d">signature</div>
+              <div style="padding: 8px 0">
+                <button onClick="{{ clearFilter }}" style="{{ rootRowStyle }}">brainhub/<span style="float: right">139</span></button>
+                <sc-for list="{{ types }}" as="t" hint-placeholder-count="10">
+                  <button onClick="{{ t.select }}" style="{{ t.style }}">{{ t.line }}<span style="float: right">{{ t.count }}</span></button>
+                </sc-for>
+              </div>
+            </div>
+            <p style="margin: 10px 2px 0; font-size: 11.5px; color: #8d857b; line-height: 1.6">押すと一覧を絞り込む。形は脳ごとに変わる。</p>
+          </div>
+
+          <div style="flex: 1 1 460px; min-width: 0; border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #2b2825">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #a39a8f">{{ resultLine }}</span>
+              <div style="flex: 1"></div>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #7d766d">sort</span>
+              <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="2">
+                <button onClick="{{ s.select }}" style="{{ s.style }}">{{ s.label }}</button>
+              </sc-for>
+            </div>
+
+            <sc-for list="{{ pages }}" as="p" hint-placeholder-count="8">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) 88px 92px; gap: 0 14px; align-items: start; padding: 11px 16px; border-bottom: 1px solid #232120" style-hover="background: #211f1c">
+                <div style="min-width: 0">
+                  <div style="font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; text-wrap: pretty">{{ p.title }}</div>
+                  <div style="margin-top: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ p.slug }}</div>
+                </div>
+                <div><span style="padding: 2px 7px; border: 1px solid #332f2b; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #b8ae9f">{{ p.type }}</span></div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #8d857b; text-align: right">{{ p.updated }}</div>
+              </div>
+            </sc-for>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b">本文は API が返さないため一覧には出ない</span>
+              <button style="height: 30px; padding: 0 12px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">もっと読み込む</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- 7. 接続情報 -->
+    <sc-if value="{{ isConnect }}">
+      <div style="max-width: 1120px; margin: 0 auto; padding: 28px 28px 80px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h1 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">kudo / brainhub</h1>
+              <span style="padding: 2px 8px; border: 1px solid #45403a; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #a39a8f">public</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #3d5642; border-radius: 4px; background: #223025; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9ecfae"><span style="width: 5px; height: 5px; border-radius: 50%; background: #6faa80"></span>[ready]</span>
+            </div>
+            <p style="margin: 10px 0 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 600px">brainhub 自身の設計判断・調査・アイデアを置いている脳。決定は decision、未確定は idea。</p>
+          </div>
+          <div style="flex: none; display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-size: 12.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">招待</button>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid #45403a; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #a39a8f"><span style="width: 5px; height: 5px; border-radius: 50%; background: #7d766d"></span>未接続</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 2px; margin: 22px 0 0; border-bottom: 1px solid #2b2825">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.select }}" style="{{ t.style }}">{{ t.label }}<span style="{{ t.countStyle }}">{{ t.count }}</span></button>
+          </sc-for>
+        </div>
+        <div style="padding-top: 24px; margin-bottom: 20px">
+          <h2 style="margin: 0 0 6px; font-size: 16px; font-weight: 600">brainhub に繋ぐ</h2>
+          <p style="margin: 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 600px">下の 2 つの値をクライアントに渡す。URL を貼るだけでは繋がらないので、先にそこだけ読んでほしい。</p>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+          <div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+            <div style="border: 1px solid #45403a; border-radius: 8px; background: #211f1c; padding: 16px 18px; display: flex; gap: 14px">
+              <span style="flex: none; padding: 2px 8px; border: 1px solid #6f675f; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #eae6e0; height: 22px">expected</span>
+              <div>
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px">最初の接続は失敗する</div>
+                <p style="margin: 0 0 10px; font-size: 13px; color: #b8ae9f; line-height: 1.7">クライアントは自動登録（Dynamic Client Registration）を試みるが、brainhub は対応していない。URL を貼った直後にこのエラーが出る:</p>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #cfc6b8; background: #171614; border: 1px solid #332f2b; border-radius: 6px; padding: 10px 12px; line-height: 1.6">コネクタを編集して OAuth クライアント ID を追加してください</div>
+                <p style="margin: 10px 0 0; font-size: 13px; color: #b8ae9f; line-height: 1.7">エラーを見てから手順 03 に進めばよい。やり直しは不要。</p>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+              <div style="display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #2b2825">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d; margin-right: 6px">client</span>
+                <sc-for list="{{ clients }}" as="c" hint-placeholder-count="3">
+                  <button onClick="{{ c.select }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+
+              <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 18px 18px; border-bottom: 1px solid #232120">
+                  <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #8d857b; padding-top: 2px">{{ s.n }}</div>
+                  <div style="min-width: 0">
+                    <div style="font-size: 14.5px; font-weight: 600; margin-bottom: 6px">{{ s.title }}</div>
+                    <p style="margin: 0; font-size: 13px; color: #a39a8f; line-height: 1.7; max-width: 560px">{{ s.body }}</p>
+                    <sc-if value="{{ s.code }}">
+                      <div style="margin-top: 10px; display: flex; align-items: stretch; border: 1px solid #332f2b; border-radius: 6px; background: #171614; overflow: hidden">
+                        <div style="flex: 1; min-width: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #cfc6b8; padding: 11px 13px; white-space: pre; overflow-x: auto; line-height: 1.7">{{ s.code }}</div>
+                        <button onClick="{{ s.copy }}" style="flex: none; border: none; border-left: 1px solid #332f2b; background: transparent; color: #a39a8f; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 0 13px; cursor: pointer" style-hover="color: #eae6e0; background: #211f1c">{{ s.copyLabel }}</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ s.hint }}">
+                      <div style="margin-top: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #a39a8f; line-height: 1.7">{{ s.hint }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+
+              <div style="padding: 18px">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px">繋がったかの確認</div>
+                <p style="margin: 0 0 12px; font-size: 13px; color: #a39a8f; line-height: 1.7">クライアントのツール一覧に 3 つ出ていれば完了。出ていなければ手順 03 のクライアント ID を疑う。</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px">
+                  <span style="padding: 4px 10px; border: 1px solid #332f2b; border-radius: 999px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #cfc6b8">brainhub_search_pages</span>
+                  <span style="padding: 4px 10px; border: 1px solid #332f2b; border-radius: 999px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #cfc6b8">brainhub_get_page</span>
+                  <span style="padding: 4px 10px; border: 1px solid #332f2b; border-radius: 999px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #cfc6b8">brainhub_list_types</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex: 1 1 300px; max-width: 350px; min-width: 0; position: sticky; top: 76px; display: flex; flex-direction: column; gap: 14px">
+            <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+              <div style="padding: 10px 14px; border-bottom: 1px solid #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d">credentials</div>
+              <div style="padding: 16px">
+                <sc-for list="{{ fields }}" as="f" hint-placeholder-count="2">
+                  <div style="margin-bottom: 16px">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px">
+                      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #b8ae9f">{{ f.label }}</span>
+                      <button onClick="{{ f.copy }}" style="border: 1px solid #332f2b; border-radius: 5px; background: #211f1c; color: #cfc6b8; font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 3px 9px; cursor: pointer" style-hover="border-color: #45403a; color: #eae6e0">{{ f.copyLabel }}</button>
+                    </div>
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; background: #171614; border: 1px solid #332f2b; border-radius: 6px; padding: 10px 12px; word-break: break-all; line-height: 1.5">{{ f.value }}</div>
+                    <div style="margin-top: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b">{{ f.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+              <div style="padding: 10px 14px; border-bottom: 1px solid #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d">access</div>
+              <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; color: #a39a8f; line-height: 1.6">
+                <div><span style="color: #eae6e0">public</span> — 誰でも接続できる。読み取りのみ。</div>
+                <div><span style="color: #eae6e0">139 pages</span> — 全ページが検索・取得の対象。</div>
+                <div><span style="color: #eae6e0">slug</span> — 不変の引用キー。AI にはこれで指定させる。</div>
+              </div>
+            </div>
+
+            <div style="font-size: 12.5px; color: #8d857b; line-height: 1.7; padding: 0 2px">繋がらないときは<a href="#" style="color: #cfc6b8; text-decoration: underline">既知の失敗パターン</a>を見る。</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- 5. 招待 -->
+    <sc-if value="{{ isInvites }}">
+      <div style="max-width: 1120px; margin: 0 auto; padding: 28px 28px 80px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h1 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">kudo / brainhub</h1>
+              <span style="padding: 2px 8px; border: 1px solid #45403a; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #a39a8f">public</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #3d5642; border-radius: 4px; background: #223025; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9ecfae"><span style="width: 5px; height: 5px; border-radius: 50%; background: #6faa80"></span>[ready]</span>
+            </div>
+            <p style="margin: 10px 0 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 600px">brainhub 自身の設計判断・調査・アイデアを置いている脳。決定は decision、未確定は idea。</p>
+          </div>
+          <div style="flex: none; display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-size: 12.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">招待</button>
+            <button onClick="{{ goConnectTab }}" style="height: 32px; padding: 0 14px; border: none; border-radius: 6px; background: #eae6e0; color: #171614; font-size: 12.5px; font-weight: 600; cursor: pointer" style-hover="background: #ffffff">この脳に繋ぐ</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 2px; margin: 22px 0 0; border-bottom: 1px solid #2b2825">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.select }}" style="{{ t.style }}">{{ t.label }}<span style="{{ t.countStyle }}">{{ t.count }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="padding-top: 24px; margin-bottom: 20px">
+          <h2 style="margin: 0 0 6px; font-size: 16px; font-weight: 600">招待</h2>
+          <p style="margin: 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 620px">public な脳なので、接続そのものに招待は要らない。招待が効くのは private の脳と、この脳の書き込み権限を渡すとき。</p>
+        </div>
+
+        <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; padding: 16px; margin-bottom: 20px">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+            <div style="flex: 1 1 260px; min-width: 0">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d; margin-bottom: 6px">宛先</div>
+              <input placeholder="メールアドレス、または空欄でリンクを発行" style="width: 100%; height: 34px; padding: 0 11px; border: 1px solid #332f2b; border-radius: 6px; background: #171614; font-size: 13px; outline: none" />
+            </div>
+            <div style="flex: 0 1 140px">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d; margin-bottom: 6px">権限</div>
+              <div style="height: 34px; padding: 0 11px; border: 1px solid #332f2b; border-radius: 6px; background: #171614; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between">reader<span style="color: #8d857b; font-size: 10px">▾</span></div>
+            </div>
+            <div style="flex: 0 1 140px">
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d; margin-bottom: 6px">有効期限</div>
+              <div style="height: 34px; padding: 0 11px; border: 1px solid #332f2b; border-radius: 6px; background: #171614; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between">7 日<span style="color: #8d857b; font-size: 10px">▾</span></div>
+            </div>
+            <button style="flex: none; height: 34px; padding: 0 16px; border: none; border-radius: 6px; background: #eae6e0; color: #171614; font-size: 12.5px; font-weight: 600; cursor: pointer" style-hover="background: #ffffff">招待を作る</button>
+          </div>
+          <p style="margin: 10px 0 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b">発行後に出る /invite/{token} を相手に渡す。受諾した時点で接続できるようになる。</p>
+        </div>
+
+        <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; overflow: hidden">
+          <div style="display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid #2b2825">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #a39a8f">3 invites · pending 1</span>
+          </div>
+          <div style="overflow-x: auto">
+            <div style="display: grid; grid-template-columns: minmax(180px, 1fr) 84px 108px 104px 118px; gap: 0 16px; min-width: 640px; padding: 9px 16px; background: #201e1b; border-bottom: 1px solid #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #7d766d">
+              <div>invitee</div><div>role</div><div>state</div><div>expires</div><div></div>
+            </div>
+            <sc-for list="{{ invites }}" as="i" hint-placeholder-count="3">
+              <div style="display: grid; grid-template-columns: minmax(180px, 1fr) 84px 108px 104px 118px; gap: 0 16px; min-width: 640px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #232120" style-hover="background: #211f1c">
+                <div style="min-width: 0; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ i.target }}</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #a39a8f">{{ i.role }}</div>
+                <div style="min-width: 0"><span style="{{ i.badgeStyle }}"><span style="{{ i.dotStyle }}"></span>{{ i.stateLabel }}</span></div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #8d857b">{{ i.expires }}</div>
+                <div><button onClick="{{ i.copy }}" style="height: 28px; padding: 0 11px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #cfc6b8; cursor: pointer" style-hover="border-color: #45403a; color: #eae6e0">{{ i.action }}</button></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- 設定 -->
+    <sc-if value="{{ isSettings }}">
+      <div style="max-width: 1120px; margin: 0 auto; padding: 28px 28px 80px">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h1 style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">kudo / brainhub</h1>
+              <span style="padding: 2px 8px; border: 1px solid #45403a; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #a39a8f">public</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #3d5642; border-radius: 4px; background: #223025; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9ecfae"><span style="width: 5px; height: 5px; border-radius: 50%; background: #6faa80"></span>[ready]</span>
+            </div>
+            <p style="margin: 10px 0 0; font-size: 13.5px; color: #a39a8f; line-height: 1.6; max-width: 600px">brainhub 自身の設計判断・調査・アイデアを置いている脳。決定は decision、未確定は idea。</p>
+          </div>
+          <div style="flex: none; display: flex; gap: 8px">
+            <button style="height: 32px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-size: 12.5px; cursor: pointer" style-hover="border-color: #45403a; background: #262320">招待</button>
+            <button onClick="{{ goConnectTab }}" style="height: 32px; padding: 0 14px; border: none; border-radius: 6px; background: #eae6e0; color: #171614; font-size: 12.5px; font-weight: 600; cursor: pointer" style-hover="background: #ffffff">この脳に繋ぐ</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 2px; margin: 22px 0 0; border-bottom: 1px solid #2b2825">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <button onClick="{{ t.select }}" style="{{ t.style }}">{{ t.label }}<span style="{{ t.countStyle }}">{{ t.count }}</span></button>
+          </sc-for>
+        </div>
+
+        <div style="padding-top: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 720px">
+          <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; padding: 16px 18px">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px">公開範囲</div>
+            <p style="margin: 0 0 12px; font-size: 13px; color: #a39a8f; line-height: 1.7">public は誰でも接続できる。private に変えると、既存の接続のうち招待されていないものは次回の呼び出しで失効する。</p>
+            <div style="display: flex; gap: 8px">
+              <button style="height: 30px; padding: 0 13px; border: 1px solid #45403a; border-radius: 6px; background: #2b2825; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer">public</button>
+              <button style="height: 30px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: transparent; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #8d857b; cursor: pointer" style-hover="border-color: #45403a; color: #eae6e0">private</button>
+            </div>
+          </div>
+
+          <div style="border: 1px solid #2b2825; border-radius: 8px; background: #1c1a18; padding: 16px 18px">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px">OAuth クライアント ID の再発行</div>
+            <p style="margin: 0 0 12px; font-size: 13px; color: #a39a8f; line-height: 1.7">再発行すると、いま繋がっているクライアントはすべて再設定が必要になる。</p>
+            <button style="height: 30px; padding: 0 13px; border: 1px solid #332f2b; border-radius: 6px; background: #211f1c; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer" style-hover="border-color: #45403a">再発行</button>
+          </div>
+
+          <div style="border: 1px solid #5e3530; border-radius: 8px; background: #1c1a18; padding: 16px 18px">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #e5a79e">脳を削除する</div>
+            <p style="margin: 0 0 12px; font-size: 13px; color: #a39a8f; line-height: 1.7">139 ページと接続設定がすべて消える。slug は再利用できない。</p>
+            <button style="height: 30px; padding: 0 13px; border: 1px solid #5e3530; border-radius: 6px; background: #33221f; color: #e5a79e; font-family: 'IBM Plex Mono', monospace; font-size: 12px; cursor: pointer" style-hover="background: #3d2723">brainhub を削除</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultClient&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;claude&quot;,&quot;chatgpt&quot;,&quot;codex&quot;],&quot;default&quot;:&quot;claude&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;接続画面&quot;},&quot;pageLimit&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:12,&quot;min&quot;:4,&quot;max&quot;:18,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;脳の詳細&quot;}}">
+const TYPES = [
+  ["decision", 44], ["idea", 39], ["research", 25], ["concept", 8], ["note", 8],
+  ["analysis", 5], ["project", 4], ["report", 3], ["person", 2], ["task-list", 1]
+];
+
+const PAGES = [
+  ["mcp-url-is-server-issued", "MCP URL はサーバーが発行する", "decision", "2026-08-14"],
+  ["no-chat-ui", "チャット画面は作らない", "decision", "2026-08-13"],
+  ["signature-as-fingerprint", "type tree を知識の指紋として使う", "concept", "2026-08-12"],
+  ["dcr-unsupported-tradeoff", "Dynamic Client Registration を実装しない判断", "decision", "2026-08-11"],
+  ["connect-screen-is-the-product", "接続画面が製品の要である", "idea", "2026-08-11"],
+  ["claude-connector-failure-modes", "claude.ai コネクタ登録の失敗パターン調査", "research", "2026-08-10"],
+  ["page-body-not-in-list-api", "一覧 API は本文を返さない", "decision", "2026-08-09"],
+  ["shadcn-migration-plan", "shadcn/ui への移行計画", "project", "2026-08-08"],
+  ["slug-immutability", "slug は不変にする", "decision", "2026-08-07"],
+  ["state-must-not-rely-on-color", "状態表示を色だけに頼らない", "decision", "2026-08-06"],
+  ["invite-token-lifetime", "招待トークンの有効期限をどうするか", "idea", "2026-08-05"],
+  ["who-reads-this", "読みに来るのは人間ではない", "concept", "2026-08-04"],
+  ["provisioning-latency", "provisioning にかかる時間の実測", "analysis", "2026-08-03"],
+  ["codex-config-format", "Codex の設定ファイル形式", "research", "2026-08-02"],
+  ["router-free-url-handling", "React Router を使わない URL 判定", "decision", "2026-08-01"],
+  ["private-brain-onboarding", "private な脳の招待導線", "idea", "2026-07-31"],
+  ["weekly-2026-07", "2026-07 週報", "report", "2026-07-30"],
+  ["kudo", "工藤（オーナー）", "person", "2026-07-28"]
+];
+
+const BRAINS = [
+  ["brainhub", "public", 139, "2026-08-14", "ready", "decision 44 · idea 39 · research 25 · +7"],
+  ["design-system", "private", 24, "2026-08-12", "ready", "component 11 · decision 8 · note 5"],
+  ["infra-runbook", "private", 0, "2026-08-16", "provisioning", "—"],
+  ["crawler-notes", "private", 61, "2026-07-22", "failed", "note 40 · research 21"],
+  ["archive-2025", "public", 210, "2025-12-31", "archived", "note 96 · decision 71 · idea 43"]
+];
+
+const STATE = {
+  ready: ["#223025", "#3d5642", "#9ecfae", "#6faa80"],
+  provisioning: ["#2c2a1d", "#4d472f", "#d0c68a", "#a2985c"],
+  failed: ["#33221f", "#5e3530", "#e5a79e", "#b06a5e"],
+  archived: ["#211f1c", "#45403a", "#a39a8f", "#7d766d"]
+};
+
+const MCP_URL = "https://mcp.brainhub.dev/b/kudo/brainhub";
+const CLIENT_ID = "bh_client_9f3ad4c1e7b2";
+
+const CLIENT_STEPS = {
+  claude: [
+    { n: "01", title: "設定 → コネクタ → カスタムコネクタを追加", body: "claude.ai の設定から進む。デスクトップアプリでも同じ場所にある。" },
+    { n: "02", title: "MCP URL を貼って保存する。ここで失敗する", body: "自動登録が試みられ、OAuth クライアント ID がないと言われて止まる。ここで諦めないこと。次の手順で埋める。", code: MCP_URL, hint: "→ 「コネクタを編集して OAuth クライアント ID を追加してください」" },
+    { n: "03", title: "作られたコネクタを編集し、クライアント ID を貼る", body: "失敗したコネクタは残っている。編集画面の OAuth クライアント ID 欄に貼って保存する。シークレットは不要。", code: CLIENT_ID },
+    { n: "04", title: "接続 → 認可を許可する", body: "brainhub の認可画面に飛ぶ。許可すると読み取り権限が付与される。private な脳では招待済みのアカウントであることが確認される。" },
+    { n: "05", title: "会話から呼べることを確かめる", body: "脳の名前を出して呼ばせるのが早い。slug を渡せば特定のページを直接引ける。", code: "brainhub の decision から、接続の設計判断を挙げて" }
+  ],
+  chatgpt: [
+    { n: "01", title: "設定 → コネクタ → カスタムコネクタ", body: "ChatGPT 側も MCP サーバーを URL で登録する。ワークスペースによっては管理者の許可が必要。" },
+    { n: "02", title: "MCP URL を貼る", body: "同じ URL を使う。クライアントごとに URL は変わらない。", code: MCP_URL },
+    { n: "03", title: "認証方式に OAuth を選び、クライアント ID を貼る", body: "自動登録は使えない。クライアント ID を明示的に入れる。シークレットは空のまま。", code: CLIENT_ID },
+    { n: "04", title: "接続して認可する", body: "認可後、ツールとして呼び出せるようになる。" }
+  ],
+  codex: [
+    { n: "01", title: "設定ファイルに MCP サーバーを追記する", body: "~/.codex/config.toml を開き、末尾に追記する。既に別のサーバーがある場合は並べて書ける。", code: "[mcp_servers.brainhub]\nurl = \"" + MCP_URL + "\"\nclient_id = \"" + CLIENT_ID + "\"" },
+    { n: "02", title: "codex を再起動する", body: "起動時に設定を読む。常駐している場合は落としてから上げる。" },
+    { n: "03", title: "初回はブラウザで認可する", body: "認可 URL が標準出力に出る。開いて許可すると、トークンがローカルに保存される。", code: "codex mcp login brainhub" },
+    { n: "04", title: "ツールが見えているか確認する", body: "一覧に brainhub_* が出れば完了。", code: "codex mcp list" }
+  ]
+};
+
+const INVITES = [
+  ["yamada@example.com", "member", "pending", "2026-08-14", "2026-08-21"],
+  ["sato@example.com", "member", "accepted", "2026-08-09", "—"],
+  ["invite/7f2c… （リンク）", "reader", "expired", "2026-07-20", "2026-07-27"]
+];
+const INVITE_TOKENS = ["7f2c9ab1", "a41d0c77", "7f2c00e3"];
+const INVITE_STATE = {
+  pending: ["#2c2a1d", "#4d472f", "#d0c68a", "#a2985c"],
+  accepted: ["#223025", "#3d5642", "#9ecfae", "#6faa80"],
+  expired: ["#211f1c", "#45403a", "#a39a8f", "#7d766d"]
+};
+
+const BTN_GHOST = "height: 26px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; cursor: pointer; color: ";
+
+class Component extends DCLogic {
+  state = { screen: "top", type: null, sort: "updated", client: null, tab: "pages", vis: "all", copied: null, q: "" };
+
+  go(screen) { return () => this.setState({ screen }); }
+
+  copy(key, text) {
+    return () => {
+      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      this.setState({ copied: key });
+      clearTimeout(this._t);
+      this._t = setTimeout(() => this.setState({ copied: null }), 1600);
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const client = s.client || this.props.defaultClient || "claude";
+    const limit = this.props.pageLimit ?? 12;
+    const q = s.q.trim().toLowerCase();
+
+    const side = (key, label, mark, count) => {
+      const on = s.screen === key;
+      return {
+        label, mark, count, go: this.go(key),
+        style: "width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 2px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; background: "
+          + (on ? "#2b2825" : "transparent") + "; color: " + (on ? "#eae6e0" : "#a39a8f")
+      };
+    };
+
+    const recent = (name, state) => {
+      const on = s.screen === "detail" && name === "brainhub";
+      const c = STATE[state];
+      return {
+        name, go: this.go("detail"),
+        dot: "flex: none; width: 6px; height: 6px; border-radius: 50%; background: " + c[3],
+        style: "width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin-bottom: 2px; border: none; border-radius: 6px; cursor: pointer; background: "
+          + (on ? "#2b2825" : "transparent") + "; color: " + (on ? "#eae6e0" : "#a39a8f")
+      };
+    };
+
+    const crumbSet = s.screen === "top" ? [["kudo", 0], ["脳", 1]]
+      : s.screen === "detail" ? [["kudo", 0], ["brainhub", 1]]
+      : [["kudo", 0], ["brainhub", 0], [s.screen, 1]];
+
+    const visBtn = (key, label) => {
+      const on = s.vis === key;
+      return {
+        label, select: () => this.setState({ vis: key }),
+        style: "height: 26px; padding: 0 11px; border: 1px solid " + (on ? "#45403a" : "transparent") + "; border-radius: 6px; cursor: pointer; font-size: 12px; background: "
+          + (on ? "#2b2825" : "transparent") + "; color: " + (on ? "#eae6e0" : "#8d857b")
+      };
+    };
+
+    const tabBtn = (key, label, count) => {
+      const on = s.tab === key;
+      return {
+        label, count,
+        select: () => this.setState({ tab: key, screen: key === "pages" ? "detail" : key }),
+        style: "display: flex; align-items: center; gap: 7px; padding: 9px 13px; border: none; border-bottom: 2px solid " + (on ? "#eae6e0" : "transparent")
+          + "; background: transparent; cursor: pointer; font-size: 13px; margin-bottom: -1px; color: " + (on ? "#eae6e0" : "#8d857b"),
+        countStyle: "font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: " + (on ? "#2b2825" : "#211f1c") + "; color: #a39a8f"
+      };
+    };
+
+    const types = TYPES.map(([name, count], i) => {
+      const on = s.type === name;
+      return {
+        line: (i === TYPES.length - 1 ? "└── " : "├── ") + name, count,
+        select: () => this.setState({ type: on ? null : name }),
+        style: "display: block; width: 100%; text-align: left; border: none; cursor: pointer; padding: 5px 14px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; white-space: pre; background: "
+          + (on ? "#eae6e0" : "transparent") + "; color: " + (on ? "#171614" : "#b8ae9f")
+      };
+    });
+
+    let rows = PAGES.filter(p => (!s.type || p[2] === s.type) && (!q || p[0].includes(q) || p[1].toLowerCase().includes(q)));
+    rows = rows.slice().sort((a, b) => s.sort === "slug" ? a[0].localeCompare(b[0]) : b[3].localeCompare(a[3]));
+    const total = q ? rows.length : (s.type ? (TYPES.find(t => t[0] === s.type) || [null, 0])[1] : 139);
+
+    const sortBtn = (key, label) => ({
+      label, select: () => this.setState({ sort: key }),
+      style: BTN_GHOST + (s.sort === key ? "#eae6e0; border-color: #45403a; background: #211f1c" : "#8d857b")
+    });
+
+    const clientBtn = (key, label) => {
+      const on = client === key;
+      return {
+        label, select: () => this.setState({ client: key }),
+        style: "height: 28px; padding: 0 13px; border: 1px solid " + (on ? "#45403a" : "transparent") + "; border-radius: 6px; cursor: pointer; font-size: 12.5px; background: "
+          + (on ? "#2b2825" : "transparent") + "; color: " + (on ? "#eae6e0" : "#8d857b")
+      };
+    };
+
+    const brains = BRAINS.filter(b => s.vis === "all" || b[1] === s.vis).map(([name, visibility, pages, updated, state, signature]) => {
+      const c = STATE[state];
+      return {
+        name, visibility, pages, updated, signature,
+        stateLabel: "[" + state + "]",
+        lockStyle: "font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8d857b",
+        badgeStyle: "display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; background: " + c[0] + "; border: 1px solid " + c[1] + "; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: " + c[2],
+        dotStyle: "width: 5px; height: 5px; border-radius: 50%; background: " + c[3],
+        open: this.go("detail")
+      };
+    });
+
+    return {
+      isTop: s.screen === "top", isDetail: s.screen === "detail", isConnect: s.screen === "connect",
+      isInvites: s.screen === "invites", isSettings: s.screen === "settings",
+      invites: INVITES.map(([target, role, state, created, expires], i) => {
+        const c = INVITE_STATE[state];
+        return {
+          target, role, created, expires,
+          stateLabel: "[" + state + "]",
+          badgeStyle: "display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; background: " + c[0] + "; border: 1px solid " + c[1] + "; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: " + c[2],
+          dotStyle: "width: 5px; height: 5px; border-radius: 50%; background: " + c[3],
+          action: state === "pending" ? "リンクをコピー" : state === "expired" ? "再発行" : "取り消し",
+          copy: this.copy("inv" + i, "https://brainhub.dev/invite/" + INVITE_TOKENS[i]),
+          copied: s.copied === "inv" + i
+        };
+      }),
+      goConnect: this.go("connect"),
+      goConnectTab: () => this.setState({ screen: "connect", tab: "connect" }),
+      query: s.q,
+      onQuery: e => this.setState({ q: e.target.value }),
+      sideNav: [side("top", "脳", "▤", "5")],
+      recents: [recent("brainhub", "ready"), recent("design-system", "ready"), recent("crawler-notes", "failed")],
+      crumbs: crumbSet.map(([label, last], i) => ({
+        label: i === 0 ? label : "/ " + label,
+        style: "color: " + (last ? "#eae6e0" : "#8d857b")
+      })),
+      stats: [
+        { label: "brains", value: "5", note: "public 2 / private 3" },
+        { label: "pages", value: "434", note: "全脳の合計" },
+        { label: "connections", value: "1", note: "Claude · 3日前" },
+        { label: "state", value: "4 / 5", note: "1 件が failed" }
+      ],
+      visFilters: [visBtn("all", "すべて"), visBtn("public", "public"), visBtn("private", "private")],
+      brainCountLine: brains.length + " brains",
+      brains,
+      tabs: [tabBtn("pages", "ページ", "139"), tabBtn("connect", "接続", "1"), tabBtn("invites", "招待", "3"), tabBtn("settings", "設定", "")],
+      types,
+      rootRowStyle: "display: block; width: 100%; text-align: left; border: none; cursor: pointer; padding: 5px 14px; margin-bottom: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 500; background: "
+        + (s.type === null ? "#eae6e0" : "transparent") + "; color: " + (s.type === null ? "#171614" : "#eae6e0"),
+      clearFilter: () => this.setState({ type: null }),
+      resultLine: (s.type ? total + " pages · type = " + s.type : total + " pages") + (q ? " · \"" + s.q + "\"" : ""),
+      sorts: [sortBtn("updated", "updated"), sortBtn("slug", "slug")],
+      pages: rows.slice(0, limit).map(([slug, title, type, updated]) => ({ slug, title, type, updated })),
+      clients: [clientBtn("claude", "Claude"), clientBtn("chatgpt", "ChatGPT"), clientBtn("codex", "Codex")],
+      steps: CLIENT_STEPS[client].map((st, i) => ({
+        n: st.n, title: st.title, body: st.body, code: st.code || null, hint: st.hint || null,
+        copy: this.copy("step-" + client + i, st.code || ""),
+        copyLabel: s.copied === "step-" + client + i ? "済" : "copy"
+      })),
+      fields: [
+        { label: "MCP URL", value: MCP_URL, note: "サーバー発行。手で組み立てない。", copy: this.copy("url", MCP_URL), copyLabel: s.copied === "url" ? "コピーしました" : "コピー" },
+        { label: "OAuth Client ID", value: CLIENT_ID, note: "シークレットは不要。", copy: this.copy("cid", CLIENT_ID), copyLabel: s.copied === "cid" ? "コピーしました" : "コピー" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

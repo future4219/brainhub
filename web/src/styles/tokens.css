@@ -1,0 +1,176 @@
+@theme inline {
+  --color-canvas: var(--bh-color-canvas);
+  --color-sidebar: var(--bh-color-sidebar);
+  --color-table-head: var(--bh-color-table-head);
+  --color-surface: var(--bh-color-surface);
+  --color-divider: var(--bh-color-divider);
+  --color-surface-hover: var(--bh-color-surface-hover);
+  --color-surface-selected: var(--bh-color-surface-selected);
+  --color-border: var(--bh-color-border);
+  --color-border-control: var(--bh-color-border-control);
+  --color-border-strong: var(--bh-color-border-strong);
+  --color-border-interactive: var(--bh-color-decorative);
+  --color-text: var(--bh-color-text);
+  --color-text-hover: var(--bh-color-text-hover);
+  --color-text-muted: var(--bh-color-text-muted);
+  --color-text-secondary: var(--bh-color-text-secondary);
+  --color-text-tertiary: var(--bh-color-text-tertiary);
+  --color-text-code: var(--bh-color-text-code);
+  --color-topbar: var(--bh-color-topbar);
+
+  --font-sans: var(--bh-font-sans);
+  --font-mono: var(--bh-font-mono);
+
+  --text-xs: var(--bh-text-11);
+  --text-xs--line-height: var(--bh-leading-normal);
+  --text-sm: var(--bh-text-12);
+  --text-sm--line-height: var(--bh-leading-normal);
+  --text-ui: var(--bh-text-13);
+  --text-ui--line-height: var(--bh-leading-normal);
+  --text-body: var(--bh-text-14);
+  --text-body--line-height: var(--bh-leading-copy);
+  --text-section: var(--bh-text-16);
+  --text-section--line-height: var(--bh-leading-copy);
+  --text-title: var(--bh-text-20);
+  --text-title--line-height: var(--bh-leading-tight);
+
+  --leading-tight: var(--bh-leading-tight);
+  --leading-row: var(--bh-leading-row);
+  --leading-normal: var(--bh-leading-normal);
+  --leading-copy: var(--bh-leading-copy);
+  --leading-prose: var(--bh-leading-prose);
+  --tracking-tight: var(--bh-tracking-tight);
+  --tracking-label: var(--bh-tracking-label);
+  --tracking-section: var(--bh-tracking-section);
+
+  --radius-badge: var(--bh-radius-badge);
+  --radius-brand: var(--bh-radius-brand);
+  --radius-control: var(--bh-radius-control);
+  --radius-panel: var(--bh-radius-panel);
+  --radius-round: var(--bh-radius-round);
+  --radius-pill: var(--bh-radius-pill);
+
+  --spacing: var(--bh-space-unit);
+  --spacing-sidebar: var(--bh-sidebar-width);
+  --spacing-topbar: var(--bh-topbar-height);
+  --spacing-sticky: var(--bh-sticky-offset);
+  --spacing-search: var(--bh-search-width);
+  --spacing-type-tree: var(--bh-type-tree-width);
+  --spacing-credentials: var(--bh-credentials-width);
+  --spacing-control-sm: var(--bh-control-height-sm);
+  --spacing-control: var(--bh-control-height);
+  --spacing-brand: var(--bh-brand-size);
+  --spacing-avatar: var(--bh-avatar-size);
+  --spacing-state-dot: var(--bh-state-dot);
+  --spacing-textarea: var(--bh-textarea-height);
+
+  --container-content: var(--bh-content-width);
+  --container-copy: var(--bh-copy-width);
+  --blur-topbar: var(--bh-blur-topbar);
+}
+
+:root {
+  color-scheme: dark;
+
+  --bh-color-canvas: #171614;
+  --bh-color-sidebar: #1c1a18;
+  --bh-color-table-head: #201e1b;
+  --bh-color-surface: #211f1c;
+  --bh-color-divider: #232120;
+  --bh-color-surface-hover: #262320;
+  --bh-color-surface-selected: #2b2825;
+  --bh-color-border: #2b2825;
+  --bh-color-border-control: #332f2b;
+  --bh-color-border-strong: #45403a;
+  --bh-color-text: #eae6e0;
+  --bh-color-text-hover: #ffffff;
+  --bh-color-decorative: #7d766d;
+  --bh-color-text-muted: #8d857b;
+  --bh-color-text-secondary: #a39a8f;
+  --bh-color-text-tertiary: #b8ae9f;
+  --bh-color-text-code: #cfc6b8;
+  --bh-color-topbar: rgb(23 22 20 / 92%);
+
+  --bh-color-ready-bg: #223025;
+  --bh-color-ready-border: #3d5642;
+  --bh-color-ready-text: #9ecfae;
+  --bh-color-ready-dot: #6faa80;
+  --bh-color-pending-bg: #2c2a1d;
+  --bh-color-pending-border: #4d472f;
+  --bh-color-pending-text: #d0c68a;
+  --bh-color-pending-dot: #a2985c;
+  --bh-color-failed-bg: #33221f;
+  --bh-color-failed-border: #5e3530;
+  --bh-color-failed-text: #e5a79e;
+  --bh-color-failed-dot: #b06a5e;
+
+  --bh-font-sans: "IBM Plex Sans JP", "Helvetica Neue", sans-serif;
+  --bh-font-mono: "IBM Plex Mono", monospace;
+  --bh-text-11: 0.6875rem;
+  --bh-text-12: 0.75rem;
+  --bh-text-13: 0.8125rem;
+  --bh-text-14: 0.875rem;
+  --bh-text-16: 1rem;
+  --bh-text-20: 1.25rem;
+  --bh-leading-tight: 1.3;
+  --bh-leading-row: 1.45;
+  --bh-leading-normal: 1.5;
+  --bh-leading-copy: 1.6;
+  --bh-leading-prose: 1.7;
+  --bh-tracking-tight: -0.01em;
+  --bh-tracking-label: 0.08em;
+  --bh-tracking-section: 0.1em;
+
+  --bh-space-unit: 0.25rem;
+  --bh-space-2: 0.125rem;
+  --bh-space-4: 0.25rem;
+  --bh-space-8: 0.5rem;
+  --bh-space-12: 0.75rem;
+  --bh-space-16: 1rem;
+  --bh-space-24: 1.5rem;
+  --bh-space-32: 2rem;
+  --bh-space-80: 5rem;
+
+  --bh-radius-badge: 0.25rem;
+  --bh-radius-brand: 0.3125rem;
+  --bh-radius-control: 0.375rem;
+  --bh-radius-panel: 0.5rem;
+  --bh-radius-round: 50%;
+  --bh-radius-pill: 999px;
+
+  --bh-border-default: 1px;
+  --bh-border-active: 2px;
+  --bh-border-focus: 2px;
+  --bh-focus-offset: 2px;
+  --bh-opacity-disabled: 0.5;
+
+  --bh-sidebar-width: 14.75rem;
+  --bh-topbar-height: 3.25rem;
+  --bh-sticky-offset: 4.75rem;
+  --bh-content-width: 70rem;
+  --bh-copy-width: 37.5rem;
+  --bh-search-width: 15rem;
+  --bh-type-tree-width: 15.625rem;
+  --bh-credentials-width: 21.875rem;
+  --bh-control-height-sm: 1.875rem;
+  --bh-control-height: 2.125rem;
+  --bh-brand-size: 1.5rem;
+  --bh-avatar-size: 1.625rem;
+  --bh-state-dot: 0.375rem;
+  --bh-textarea-height: 6rem;
+  --bh-blur-topbar: 0.5rem;
+
+  --bh-brain-name-min: 10rem;
+  --bh-brain-name-width: 11.875rem;
+  --bh-brain-pages-width: 4rem;
+  --bh-brain-updated-width: 6rem;
+  --bh-brain-state-width: 6.25rem;
+  --bh-invite-role-width: 5.25rem;
+  --bh-invite-state-width: 6.75rem;
+  --bh-invite-expiry-width: 6.5rem;
+  --bh-invite-action-width: 7.375rem;
+  --bh-type-count-width: 3rem;
+  --bh-step-number-width: 2rem;
+  --bh-page-type-width: 5.5rem;
+  --bh-page-updated-width: 5.75rem;
+}
