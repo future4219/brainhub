@@ -41,7 +41,6 @@ services:
       - --port
       - "3131"
       - --public-url
-      - https://numerical-homeland-ash-payroll.trycloudflare.com
       - ${GBRAIN_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
