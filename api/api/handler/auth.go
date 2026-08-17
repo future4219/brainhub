@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"brainhub/api/api/middleware"
-	"brainhub/api/api/schema"
+	"brainhub/api/middleware"
+	"brainhub/api/schema"
 	"brainhub/usecase/input_port"
 )
 

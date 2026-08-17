@@ -45,7 +45,7 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 
 | 操作 | 用途 | 使用箇所 |
 |---|---|---|
-| `POST /admin/login` | bootstrap tokenを24時間のadmin cookieへ交換 | `adapter/gbrain/admin_client.go` |
+| `POST /admin/login` | bootstrap tokenを24時間のadmin cookieへ交換 | `api/adapter/gbrain/admin_client.go` |
 | `POST /admin/api/register-client` | 利用者向けpublic clientと、脳ごとのconfidential writer client発行 | client発行、Brain作成/adopt、writer再発行 |
 | `POST /admin/api/revoke-client` | 利用者clientの失効、writer再発行前の旧client失効 | `DELETE /api/clients/{id}`、`POST /api/brains/{id}/writer/reissue` |
 
@@ -90,14 +90,14 @@ writer clientは `issued_clients` に入れない。`issued_clients.write_source
 上の表を、実際に動く GBrain に対して検証するテストを持つ。**アップグレードの可否をこれで判断する。**
 
 ```
-test/contract/gbrain_contract_test.go
+api/test/contract/gbrain_contract_test.go
 ```
 
 要件:
 
 - 実際に動いている GBrain（compose の `gbrain` サービス）に対して実行する
 - モックを使わない。**モックで通っても意味がない**
-- 通常の `go test ./...` からは除外し、タグかフラグで明示的に走らせる
+- 通常の `go -C api test ./...` からは除外し、タグかフラグで明示的に走らせる
 - 各テストは上の表の項目番号を参照するコメントを持つ
 - 「拒否されること」も検証する（例: `file://` が 400 を返す、`path` が MCP 経由で拒否される）
 
@@ -158,7 +158,7 @@ docker compose exec gbrain gbrain doctor --json
 ### 5. 契約テストを走らせる
 
 ```bash
-go test -tags=contract ./test/contract/...
+go -C api test -tags=contract ./test/contract/...
 ```
 
 **ここが判断点。**
@@ -180,17 +180,17 @@ docker compose build gbrain && docker compose up -d gbrain
 
 ## シムの扱い
 
-`shim/main.go` は、**GBrain が意図的に閉じた境界を、brainhub の責任で 1 箇所だけ開けたもの**である。存在理由は契約表の挙動 1 に依存している。
+`api/shim/main.go` は、**GBrain が意図的に閉じた境界を、brainhub の責任で 1 箇所だけ開けたもの**である。存在理由は契約表の挙動 1 に依存している。
 
 ### 現在の位置づけ
 
 - brainhub で唯一、GBrain の CLI を直接実行する場所
-- `usecase/output_port/source_provisioner.go` の背後にあり、**実装の差し替えは 1 ファイルで済む**
+- `api/usecase/output_port/source_provisioner.go` の背後にあり、**実装の差し替えは 1 ファイルで済む**
 - パスを外部から受け取らないため、GBrain が防いでいる攻撃（任意パスの登録）は成立しない
 
 ### 削除条件
 
-以下のいずれかが成立したら、シムを削除して `adapter/gbrain` の HTTP 実装に差し替える。
+以下のいずれかが成立したら、シムを削除して `api/adapter/gbrain` の HTTP 実装に差し替える。
 
 1. `/admin/api/` にローカルパスで source を作成できるエンドポイントが存在する
 2. MCP の `sources_add` が、ホスト内の許可されたルート配下に限って `path` を受け付けるようになる

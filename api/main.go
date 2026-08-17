@@ -13,7 +13,7 @@ import (
 	"brainhub/adapter/database/repository"
 	"brainhub/adapter/gbrain"
 	"brainhub/adapter/ulid"
-	"brainhub/api/api/router"
+	"brainhub/api/router"
 	"brainhub/config"
 	"brainhub/usecase/interactor"
 )

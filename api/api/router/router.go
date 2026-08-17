@@ -3,8 +3,8 @@ package router
 import (
 	"net/http"
 
-	"brainhub/api/api/handler"
-	"brainhub/api/api/middleware"
+	"brainhub/api/handler"
+	"brainhub/api/middleware"
 	"brainhub/usecase/input_port"
 )
 

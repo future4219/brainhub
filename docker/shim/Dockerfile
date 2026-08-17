@@ -1,9 +1,9 @@
 FROM golang:1.22-bookworm AS build
 
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY api/go.mod api/go.sum ./
 RUN go mod download
-COPY . .
+COPY api/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/brainhub-shim ./shim
 
 FROM gbrain

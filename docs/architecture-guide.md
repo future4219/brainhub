@@ -1052,7 +1052,7 @@ AI が新機能を追加するときは、原則として次の順序で進め�
 10. api/router に route を追加する
 11. main.go で依存を wire する
 12. unit test と integration test を追加または更新する
-13. `gofmt`、`go test ./...` を実行する
+13. `gofmt`、`go -C api test ./...` を実行する
 
 DB schema 変更が必要な場合は、migration を明示的に追加する。
 ただし、DB schema 変更は影響が大きいため、ユーザーの明示指示がない限り行わない。
@@ -1105,7 +1105,7 @@ integration_test:
 必須:
 
 ```sh
-go test ./...
+go -C api test ./...
 ```
 
 ## API Contract Rules
@@ -1172,7 +1172,7 @@ AI は実装前に次を確認する。
 実装後に次を確認する。
 
 - `gofmt` 済みか
-- `go test ./...` が通るか
+- `go -C api test ./...` が通るか
 - error を握りつぶしていないか
 - structured logging を使っているか
 - SQL injection の余地がないか

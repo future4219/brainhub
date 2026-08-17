@@ -10,7 +10,7 @@
 
 1. **入口のない機能を作らない。** ディレクトリも同じ。
 2. **GBrain の CLI / API でできることを、コードで再実装しない。**
-3. **GBrain への呼び出しは `adapter/gbrain` の外に一切出さない。**
+3. **GBrain への呼び出しは `api/adapter/gbrain` の外に一切出さない。**
 4. **決定的な処理はコードで書く。LLM には判断だけさせる。**
 
 ## 核
@@ -89,6 +89,8 @@ runtime 分離が必要になるのは、他者のデータを同一 DB に置�
 - **TypeScript / React** — 公開ページ、招待画面、編集画面
 - **GBrain** — 知識基盤（`v0.45.18.0` にタグ固定）
 - **Postgres + pgvector** — GBrain の索引・ベクトル
+
+アプリ本体は `api/`（Go）と `web/`（React）に分ける。
 
 Go の設計指針は [`docs/architecture-guide.md`](docs/architecture-guide.md)、フロントエンドの配置と実装規約は [`docs/frontend-guide.md`](docs/frontend-guide.md)。どちらも目標形であって、掟 1 に従い不要なディレクトリは作らない。
 

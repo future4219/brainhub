@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"brainhub/api/api/router"
+	"brainhub/api/router"
 	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
