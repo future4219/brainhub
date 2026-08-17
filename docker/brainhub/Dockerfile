@@ -1,10 +1,10 @@
 FROM golang:1.22-alpine AS build
 
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY api/go.mod api/go.sum ./
 RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/brainhub ./api \
+COPY api/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/brainhub . \
     && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/brainhub-migrate ./cmd/migrate
 
 FROM alpine:3.22

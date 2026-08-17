@@ -10,7 +10,7 @@
 
 1. **入口のない機能を作らない。** ディレクトリも同じ。
 2. **GBrain の CLI / API でできることを、コードで再実装しない。**
-3. **GBrain への呼び出しは `adapter/gbrain` の外に一切出さない。**
+3. **GBrain への呼び出しは `api/adapter/gbrain` の外に一切出さない。**
 4. **決定的な処理はコードで書く。LLM には判断だけさせる。**
 
 ## 核
@@ -87,8 +87,10 @@ runtime 分離が必要になるのは、他者のデータを同一 DB に置�
 
 - **Go** — プロキシ、招待・権限 API
 - **TypeScript / React** — 公開ページ、招待画面、編集画面
-- **GBrain** — 知識基盤（`v0.45.12.0` にタグ固定）
+- **GBrain** — 知識基盤（`v0.45.18.0` にタグ固定）
 - **Postgres + pgvector** — GBrain の索引・ベクトル
+
+アプリ本体は `api/`（Go）と `web/`（React）に分ける。
 
 Go の設計指針は [`docs/architecture-guide.md`](docs/architecture-guide.md)、フロントエンドの配置と実装規約は [`docs/frontend-guide.md`](docs/frontend-guide.md)。どちらも目標形であって、掟 1 に従い不要なディレクトリは作らない。
 
@@ -106,6 +108,8 @@ BRAINHUB_DATABASE_URL=postgresql://brainhub:<password>@postgres:5432/brainhub
 BRAINHUB_GBRAIN_CLIENT_ID=
 BRAINHUB_GBRAIN_CLIENT_SECRET=
 GBRAIN_ADMIN_BOOTSTRAP_TOKEN=
+# openssl rand -base64 32 で生成し、変更せず保持する
+BRAINHUB_WRITER_CREDENTIAL_KEY=
 SHIM_TOKEN=
 # 公開先を変える場合は2つを同じoriginに揃える
 GBRAIN_PUBLIC_URL=http://localhost:8080
@@ -207,6 +211,11 @@ POST /api/brains/{sourceID}/adopt        既存GBrain sourceを所有する（�
 GET  /api/brains                         閲覧可能なBrainの配列
 GET  /api/brains/{sourceID}              閲覧不可も404
 GET  /api/brains/{sourceID}/pages        閲覧不可も404
+GET  /api/brains/{sourceID}/pages/{slug} 本文・Timelineを含むページ1件
+GET  /api/brains/{sourceID}/page-types   owner/editorのみ。schema packの型一覧
+POST /api/brains/{sourceID}/pages        owner/editorのみ。ページ作成
+PUT  /api/brains/{sourceID}/pages/{slug} owner/editorのみ。本文更新・Timeline 1行追記
+POST /api/brains/{sourceID}/writer/reissue ownerのみ。Web書き込み用clientを再発行
 POST /api/brains/{sourceID}/invitations  ownerのみ。招待tokenは作成時だけ返す
 GET  /api/brains/{sourceID}/invitations  ownerのみ。生tokenは返さない
 POST /api/invitations/{token}/accept     招待を受諾してMembershipを作る
@@ -221,6 +230,8 @@ DELETE /api/brains/{sourceID}/members/{userID} ownerのみ。clientも連鎖失�
 本番では `BRAINHUB_ENV=production` を設定し、session cookie に `Secure` を付ける。
 
 Claude Webへ接続するときはMCP URLだけでなく、brainhubで発行したOAuth Client IDをコネクタ編集画面へ設定する。発行するclientはpublic clientなのでsecretはない。
+
+Web編集用には、脳の作成・adopt時にsourceへ固定したconfidential writer clientを1本だけ発行する。secretは `BRAINHUB_WRITER_CREDENTIAL_KEY` によるAES-GCM暗号文として `brain_writer_clients` に保存し、平文をDBへ置かない。利用者へ配るpublic clientを記録する `issued_clients` は流用しない。後者はUser/Membershipに従って失効する鍵でsecretを保持しない一方、writerはbrainhub自身が脳ごとに恒久保持する別ライフサイクルだからである。
 
 ### 開発
 
@@ -251,6 +262,7 @@ docker compose watch brainhub
 - volume は名前付きではなくホストパスを使う。`docker compose down -v` で正本が消えないようにするため。
 - `sync` が滞ると検索結果が古いまま返る。`autopilot` を必ず起動しておく。
 - `BRAINHUB_DATABASE_URL` はDocker内部の `postgres:5432` に固定する。ホスト用URLを別に持たない。
+- `BRAINHUB_WRITER_CREDENTIAL_KEY` を失うと、既存の全writer client secretを復号できない。新しい鍵を `openssl rand -base64 32` で `.env` に設定してbrainhubを再起動し、各脳の「接続」タブから「Writer clientを再発行」を実行する（またはowner sessionで `POST /api/brains/{sourceID}/writer/reissue`）。GBrain側の旧clientを失効して新規発行し、`brain_writer_clients` の記録を作り直す。脳、正本Markdown、git履歴、GBrainの知識索引は失われない。鍵のローテーション自体は未実装なので、平常時に値を変更しない。
 
 ## 進め方
 

@@ -22,7 +22,13 @@ import {
   revokeInvitation,
 } from "@/lib/accessApi";
 import { APIError } from "@/lib/api";
-import { getBrain, getPublicConfig, listPages } from "@/lib/brainApi";
+import {
+  getBrain,
+  getPublicConfig,
+  listPages,
+  listPageTypes,
+  reissueWriter,
+} from "@/lib/brainApi";
 import type { ConnectClient } from "@/lib/format";
 
 export function BrainDetailContainer() {
@@ -36,6 +42,7 @@ export function BrainDetailContainer() {
   );
   const [pages, setPages] = useState<Page[] | null>(null);
   const [pagesError, setPagesError] = useState("");
+  const [canWrite, setCanWrite] = useState(false);
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [clients, setClients] = useState<IssuedClient[] | null>(null);
   const [clientAuthorized, setClientAuthorized] = useState<boolean | null>(null);
@@ -45,6 +52,8 @@ export function BrainDetailContainer() {
   const [inviteError, setInviteError] = useState("");
   const [createdLink, setCreatedLink] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [writerReissuing, setWriterReissuing] = useState(false);
+  const [writerStatus, setWriterStatus] = useState("");
   const [copyState, setCopyState] = useState<
     Record<string, "copied" | "failed">
   >({});
@@ -79,6 +88,17 @@ export function BrainDetailContainer() {
         ),
       );
   }, [brain?.state, sourceID]);
+
+  useEffect(() => {
+    if (brain?.state !== "ready" || shell.viewer === undefined) return;
+    if (shell.viewer === null) {
+      setCanWrite(false);
+      return;
+    }
+    void listPageTypes(sourceID)
+      .then(() => setCanWrite(true))
+      .catch(() => setCanWrite(false));
+  }, [brain?.state, shell.viewer, sourceID]);
 
   useEffect(() => {
     if (tab !== "connect" || brain?.state !== "ready") return;
@@ -215,6 +235,23 @@ export function BrainDetailContainer() {
     }
   }
 
+  async function reissueBrainWriter() {
+    setWriterReissuing(true);
+    setWriterStatus("");
+    try {
+      await reissueWriter(sourceID);
+      setWriterStatus("Writer client を再発行しました。ページを書き込めます。");
+      setBrain(await getBrain(sourceID));
+      setCanWrite(true);
+    } catch {
+      setWriterStatus(
+        "Writer client を再発行できません。GBrain と暗号鍵の設定を確認してください。",
+      );
+    } finally {
+      setWriterReissuing(false);
+    }
+  }
+
   async function refreshInvitations() {
     setInvitations(await listInvitations(sourceID));
     setInviteAuthorized(true);
@@ -272,6 +309,7 @@ export function BrainDetailContainer() {
         detail={detail}
         page={{
           sourceID,
+          canWrite,
           pages,
           error: pagesError,
           typeCounts,
@@ -303,11 +341,18 @@ export function BrainDetailContainer() {
           authorized: clientAuthorized,
           error: connectError,
           submitting,
+          writerReissuing,
+          writerStatus,
+          canReissueWriter:
+            shell.viewer !== null &&
+            shell.viewer !== undefined &&
+            shell.viewer.id === brain?.owner_id,
           copyState,
           onClientChange: setConnectClient,
           onCopy: copy,
           onIssue: createClient,
           onRevoke: removeClient,
+          onReissueWriter: reissueBrainWriter,
         }}
       />
     );

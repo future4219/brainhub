@@ -13,7 +13,7 @@ import (
 	"brainhub/adapter/database/repository"
 	"brainhub/adapter/gbrain"
 	"brainhub/adapter/ulid"
-	"brainhub/api/api/router"
+	"brainhub/api/router"
 	"brainhub/config"
 	"brainhub/usecase/interactor"
 )
@@ -45,15 +45,24 @@ func main() {
 	clock := clock.Clock{}
 	ids := ulid.Generator{}
 	repositories := repository.New(pool, clock, ids)
+	writerService, err := gbrain.NewWriterService(
+		configuration.GBrainBaseURL, adminClient, repositories, clock, configuration.WriterCredentialKey,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := writerService.Backfill(context.Background()); err != nil {
+		log.Printf("brain writer backfill incomplete: %v", err)
+	}
 	shimClient, err := gbrain.NewShimClient(configuration.ShimURL, configuration.ShimToken)
 	if err != nil {
 		log.Fatal(err)
 	}
-	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, clock, ids)
+	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, writerService, clock, ids)
 	if err != nil {
 		log.Fatal(err)
 	}
-	pageUseCase, err := interactor.NewPageUseCase(client, repositories, repositories, configuration.PublicPageTypes)
+	pageUseCase, err := interactor.NewPageUseCase(client, writerService, repositories, repositories, configuration.PublicPageTypes)
 	if err != nil {
 		log.Fatal(err)
 	}

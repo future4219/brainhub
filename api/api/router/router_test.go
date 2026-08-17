@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"brainhub/api/api/router"
+	"brainhub/api/router"
 	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
@@ -28,6 +28,54 @@ func (r *pageUseCase) List(_ context.Context, sourceID entity.SourceID, _ string
 		return nil, input_port.ErrBrainNotFound
 	}
 	return r.pages, nil
+}
+
+func (r *pageUseCase) Get(_ context.Context, sourceID entity.SourceID, slug, _ string) (entity.PageDetail, error) {
+	r.sourceID = sourceID
+	if sourceID != "brainhub" {
+		return entity.PageDetail{}, input_port.ErrBrainNotFound
+	}
+	for _, page := range r.pages {
+		if page.Slug == slug {
+			return entity.PageDetail{Page: page, CompiledTruth: "# Public\n\nBody", Timeline: "- 2026-08-15: Created"}, nil
+		}
+	}
+	return entity.PageDetail{}, input_port.ErrPageNotFound
+}
+
+func (r *pageUseCase) ListTypes(_ context.Context, sourceID entity.SourceID, _ string) ([]entity.PageType, error) {
+	if sourceID != "brainhub" {
+		return nil, input_port.ErrBrainNotFound
+	}
+	return []entity.PageType{{Name: "decision", Primitive: "concept"}}, nil
+}
+
+func (r *pageUseCase) Create(_ context.Context, sourceID entity.SourceID, _ string, input input_port.CreatePageInput) (entity.PageDetail, error) {
+	if sourceID != "brainhub" {
+		return entity.PageDetail{}, input_port.ErrBrainNotFound
+	}
+	for _, page := range r.pages {
+		if page.Slug == input.Slug {
+			return entity.PageDetail{}, input_port.ErrPageAlreadyExists
+		}
+	}
+	page := entity.Page{Slug: input.Slug, Title: input.Title, Type: input.Type}
+	r.pages = append(r.pages, page)
+	return entity.PageDetail{Page: page, CompiledTruth: input.CompiledTruth, Timeline: input.TimelineEntry, Tags: input.Tags, SupersededBy: input.SupersededBy}, nil
+}
+
+func (r *pageUseCase) Update(_ context.Context, sourceID entity.SourceID, slug, _ string, input input_port.UpdatePageInput) (entity.PageDetail, error) {
+	if sourceID != "brainhub" {
+		return entity.PageDetail{}, input_port.ErrBrainNotFound
+	}
+	for i, page := range r.pages {
+		if page.Slug == slug {
+			page.Title, page.Type = input.Title, input.Type
+			r.pages[i] = page
+			return entity.PageDetail{Page: page, CompiledTruth: input.CompiledTruth, Timeline: input.TimelineEntry, Tags: input.Tags, SupersededBy: input.SupersededBy}, nil
+		}
+	}
+	return entity.PageDetail{}, input_port.ErrPageNotFound
 }
 
 type brainUseCase struct {
@@ -75,6 +123,15 @@ func (u *brainUseCase) Get(_ context.Context, sourceID entity.SourceID, _ string
 		}
 	}
 	return entity.Brain{}, input_port.ErrBrainNotFound
+}
+
+func (u *brainUseCase) ReissueWriter(_ context.Context, sourceID entity.SourceID, _ string) error {
+	for _, brain := range u.brains {
+		if brain.SourceID == sourceID {
+			return nil
+		}
+	}
+	return input_port.ErrBrainNotFound
 }
 
 type authUseCase struct {
@@ -257,6 +314,32 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
+	t.Run("page detail", func(t *testing.T) {
+		response, err := http.Get(server.URL + "/api/brains/brainhub/pages/decisions/public")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var body map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusOK || body["slug"] != "decisions/public" || body["compiled_truth"] != "# Public\n\nBody" {
+			t.Fatalf("status/page = %d %v", response.StatusCode, body)
+		}
+	})
+
+	t.Run("missing page", func(t *testing.T) {
+		response, err := http.Get(server.URL + "/api/brains/brainhub/pages/missing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d; want 404", response.StatusCode)
+		}
+	})
+
 	t.Run("missing brain", func(t *testing.T) {
 		response, err := http.Get(server.URL + "/api/brains/missing/pages")
 		if err != nil {
@@ -346,6 +429,39 @@ func TestRoutes(t *testing.T) {
 		}
 		if response.StatusCode != http.StatusOK || user["email"] != "alice@example.com" {
 			t.Fatalf("status/user = %d %v", response.StatusCode, user)
+		}
+	})
+
+	t.Run("page write routes", func(t *testing.T) {
+		request := func(method, path, body string) *http.Response {
+			req, _ := http.NewRequest(method, server.URL+path, bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(sessionCookie)
+			response, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return response
+		}
+		for _, test := range []struct {
+			method string
+			path   string
+			body   string
+			status int
+		}{
+			{http.MethodGet, "/api/brains/brainhub/page-types", "", http.StatusOK},
+			{http.MethodPost, "/api/brains/brainhub/pages", `{"slug":"notes/new","title":"New","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"truth","timeline_entry":"2026-08-17 initial"}`, http.StatusCreated},
+			{http.MethodPost, "/api/brains/brainhub/pages", `{"slug":"notes/new","title":"New","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"truth","timeline_entry":"2026-08-17 initial"}`, http.StatusConflict},
+			{http.MethodPut, "/api/brains/brainhub/pages/notes/new", `{"title":"Updated","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline_entry":"2026-08-17 changed"}`, http.StatusOK},
+			{http.MethodPut, "/api/brains/brainhub/pages/missing", `{"title":"Missing","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline_entry":""}`, http.StatusNotFound},
+			{http.MethodPut, "/api/brains/brainhub/pages/notes/new", `{"title":"Bad","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline":"replace all","timeline_entry":""}`, http.StatusBadRequest},
+			{http.MethodPost, "/api/brains/brainhub/writer/reissue", "", http.StatusNoContent},
+		} {
+			response := request(test.method, test.path, test.body)
+			response.Body.Close()
+			if response.StatusCode != test.status {
+				t.Errorf("%s %s = %d; want %d", test.method, test.path, response.StatusCode, test.status)
+			}
 		}
 	})
 

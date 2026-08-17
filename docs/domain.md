@@ -250,6 +250,14 @@ const (
 
 **`LastVerifiedAt` を持つ理由。** GBrain の `auth list` と突き合わせて、記録に無いクライアントや失効済みのはずのクライアントを検出するため。これが無いと、上に挙げた「所有者不明の有効な鍵」を見つける手段が無い。
 
+### BrainWriterClient
+
+Web編集用のsource固定confidential client。利用者へ渡す `IssuedClient` と違い、brainhub自身が脳ごとに1本を保持する。`client_secret_ciphertext` は `BRAINHUB_WRITER_CREDENTIAL_KEY` によるAES-GCM暗号文で、associated dataに `brain_id` と `gbrain_client_id` を使う。
+
+`issued_clients.write_source_id` は流用しない。IssuedClientはUser/Membershipに従って失効しsecretを保存しないが、writerはBrainの作成・adoptから手動再発行まで独立したライフサイクルを持つためである。
+
+鍵のローテーションは未実装で、v1は `key_version` を持たない。後からnullable列を追加でき、現時点の復旧手段はownerが旧clientを失効して再発行することである。
+
 ### Page
 
 ```go
@@ -259,11 +267,20 @@ type Page struct {
     Title     string
     Type      string
     UpdatedAt time.Time
-    Body      string
+}
+
+type PageDetail struct {
+    Page
+    CompiledTruth string
+    Timeline      string
+    Tags          []string
+    SupersededBy  *string
 }
 ```
 
 **DB に持たない。** GBrain から取得してそのまま返す。テーブルもマイグレーションも作らない。正本を二重に持つと、必ずどちらかが古くなる。
+
+更新APIは `CompiledTruth` を上書きする一方、Timeline全文を入力として受け取らない。追加する1行だけを受け、サーバーがGBrainから再取得した既存Timelineへ追記する。
 
 ---
 
@@ -346,7 +363,7 @@ usecase で守る。ドメインのコメントに書き残す。
 3. Membership を revoke したら、その User の当該 Brain 向け IssuedClient をすべて revoke する。
 4. User が `suspended` になったら、その User の IssuedClient をすべて revoke する。
 5. `ready` でない Brain は公開ページに出さない。
-6. IssuedClient の secret はどの層にも保存しない。
+6. 利用者へ渡す IssuedClient の secret はどの層にも保存しない。brainhub自身のsource固定writerだけは、専用鍵で暗号化して `brain_writer_clients` に保存する。
 7. 権限判定は Membership のみを根拠とする。Invitation は根拠にしない。
 
 3 と 4 を守らないと、退職者が読み続けられる。
@@ -402,6 +419,6 @@ type BrainReconciler interface {
 | 2. 公開ページ | `Page`, `Brain`, `SourceID` |
 | 3. ユーザーと所有 | `User`, `Membership`, `Role` |
 | 4. 招待 | `Invitation`, `IssuedClient`, 照合 |
-| 5. 編集画面 | 追加なし |
+| 5. 編集画面 | `BrainWriterClient`, `PageWrite` |
 
 フェーズ 2 で `Brain` を DB に持つ。公開ページには名前・説明・公開範囲が必要で、GBrain の source はそれらを持たないため。

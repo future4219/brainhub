@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"brainhub/api/api/schema"
+	"brainhub/api/schema"
 )
 
 func Config(publicMCPURL string) http.HandlerFunc {
