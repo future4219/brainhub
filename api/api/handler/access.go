@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"brainhub/api/api/middleware"
-	"brainhub/api/api/schema"
+	"brainhub/api/middleware"
+	"brainhub/api/schema"
 	"brainhub/domain/constructor"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"

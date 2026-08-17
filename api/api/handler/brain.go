@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"brainhub/api/api/middleware"
-	"brainhub/api/api/schema"
+	"brainhub/api/middleware"
+	"brainhub/api/schema"
 	"brainhub/domain/constructor"
 	"brainhub/domain/entconst"
 	"brainhub/usecase/input_port"
@@ -89,10 +89,32 @@ func (h *BrainHandler) Adopt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 	case errors.Is(err, input_port.ErrSourceLookupFailed):
 		http.Error(w, err.Error(), http.StatusBadGateway)
+	case errors.Is(err, input_port.ErrProvisioningFailed):
+		writeJSON(w, http.StatusBadGateway, schema.BrainErrorResponse{Error: err.Error(), Brain: schema.BrainResponseFromEntity(brain)})
 	case err != nil:
 		http.Error(w, "failed to adopt brain", http.StatusInternalServerError)
 	default:
 		writeJSON(w, http.StatusCreated, schema.BrainResponseFromEntity(brain))
+	}
+}
+
+func (h *BrainHandler) ReissueWriter(w http.ResponseWriter, r *http.Request) {
+	auth, _ := middleware.Current(r)
+	sourceID, err := constructor.NewSourceID(r.PathValue("sourceID"))
+	if err != nil {
+		http.Error(w, "invalid source ID", http.StatusBadRequest)
+		return
+	}
+	err = h.useCase.ReissueWriter(r.Context(), sourceID, auth.User.ID)
+	switch {
+	case errors.Is(err, input_port.ErrBrainNotFound):
+		http.Error(w, "brain not found", http.StatusNotFound)
+	case errors.Is(err, input_port.ErrForbidden):
+		http.Error(w, "forbidden", http.StatusForbidden)
+	case err != nil:
+		http.Error(w, "failed to reissue writer client", http.StatusBadGateway)
+	default:
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

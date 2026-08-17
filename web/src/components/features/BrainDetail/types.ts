@@ -20,6 +20,7 @@ export type BrainDetailState = {
 
 export type PagesSectionProps = {
   sourceID: string;
+  canWrite: boolean;
   pages: Page[] | null;
   error: string;
   typeCounts: [string, number][];
@@ -43,11 +44,15 @@ export type ConnectSectionProps = {
   authorized: boolean | null;
   error: string;
   submitting: boolean;
+  writerReissuing: boolean;
+  writerStatus: string;
+  canReissueWriter: boolean;
   copyState: CopyState;
   onClientChange: (client: ConnectClient) => void;
   onCopy: (key: string, value: string) => void;
   onIssue: () => void;
   onRevoke: (id: string) => void;
+  onReissueWriter: () => void;
 };
 
 export type InvitationsSectionProps = {

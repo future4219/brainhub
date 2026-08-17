@@ -1,7 +1,10 @@
+import { Link } from "react-router-dom";
+
 import type { PagesSectionProps } from "@/components/features/BrainDetail/types";
 import { Feedback } from "@/components/ui/Feedback";
 import { Input } from "@/components/ui/Input";
 import { Panel } from "@/components/ui/Panel";
+import { newPageUrl, pageUrl } from "@/config/url";
 import { formatDate } from "@/lib/format";
 
 export function PagesSection(props: PagesSectionProps) {
@@ -73,6 +76,14 @@ export function PagesSection(props: PagesSectionProps) {
                 : ""}
             </h2>
             <div className="flex-1" />
+            {props.canWrite && (
+              <Link
+                className="h-control-sm rounded-control border border-border-strong bg-text px-3 py-1.5 text-ui text-canvas"
+                to={newPageUrl(props.sourceID)}
+              >
+                ページを作成
+              </Link>
+            )}
             {(["updated", "slug"] as const).map((value) => (
               <button
                 className={
@@ -91,7 +102,7 @@ export function PagesSection(props: PagesSectionProps) {
           </div>
           {props.pages.length === 0 && (
             <Feedback kind="empty">
-              公開ページがありません。ページが追加されるとここに索引が表示されます。
+              ページがありません。ページが追加されるとここに索引が表示されます。
             </Feedback>
           )}
           {props.pages.length > 0 && props.visiblePages.length === 0 && (
@@ -100,8 +111,9 @@ export function PagesSection(props: PagesSectionProps) {
             </Feedback>
           )}
           {props.visiblePages.map((page) => (
-            <article
+            <Link
               className="page-row-grid grid gap-3 border-b border-divider px-4 py-3 last:border-b-0 hover:bg-surface"
+              to={pageUrl(props.sourceID, page.slug)}
               key={page.slug}
             >
               <div className="min-w-0">
@@ -119,11 +131,11 @@ export function PagesSection(props: PagesSectionProps) {
               >
                 {formatDate(page.updated_at)}
               </time>
-            </article>
+            </Link>
           ))}
           {props.pages.length > 0 && (
             <footer className="flex items-center justify-between gap-4 px-4 py-3 font-mono text-xs text-text-muted">
-              <span>本文は API が返さないため一覧には出ない</span>
+              <span>行を選ぶと本文を表示</span>
               <span>
                 {props.visiblePages.length} / {props.pages.length}
               </span>

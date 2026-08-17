@@ -3,8 +3,8 @@ package router
 import (
 	"net/http"
 
-	"brainhub/api/api/handler"
-	"brainhub/api/api/middleware"
+	"brainhub/api/handler"
+	"brainhub/api/middleware"
 	"brainhub/usecase/input_port"
 )
 
@@ -20,8 +20,13 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	mux.Handle("GET /api/brains", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.List)))
 	mux.Handle("POST /api/brains", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Create)))
 	mux.Handle("POST /api/brains/{sourceID}/adopt", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Adopt)))
+	mux.Handle("POST /api/brains/{sourceID}/writer/reissue", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.ReissueWriter)))
 	mux.Handle("GET /api/brains/{sourceID}", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.Get)))
 	mux.Handle("GET /api/brains/{sourceID}/pages", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.List)))
+	mux.Handle("POST /api/brains/{sourceID}/pages", middleware.RequireSession(authUseCase, http.HandlerFunc(pageHandler.Create)))
+	mux.Handle("GET /api/brains/{sourceID}/page-types", middleware.RequireSession(authUseCase, http.HandlerFunc(pageHandler.ListTypes)))
+	mux.Handle("PUT /api/brains/{sourceID}/pages/{slug...}", middleware.RequireSession(authUseCase, http.HandlerFunc(pageHandler.Update)))
+	mux.Handle("GET /api/brains/{sourceID}/pages/{slug...}", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.Get)))
 	mux.Handle("POST /api/brains/{sourceID}/invitations", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.CreateInvitation)))
 	mux.Handle("GET /api/brains/{sourceID}/invitations", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.ListInvitations)))
 	mux.Handle("POST /api/brains/{sourceID}/clients", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.IssueClient)))

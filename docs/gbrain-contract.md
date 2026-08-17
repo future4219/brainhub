@@ -25,8 +25,11 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 |---|---|---|
 | `list_pages` | ページ一覧 | `GET /api/brains/{id}/pages` |
 | `sources_list` | source の実在確認 | `POST /api/brains/{id}/adopt` |
-| `get_page` | 単体取得 | 編集画面（未実装） |
-| `put_page` | 書き込み | 編集画面（未実装） |
+| `get_page` | 単体取得 | `GET /api/brains/{id}/pages/{slug...}`、個別ページ閲覧 |
+| `put_page` | 本文全体の書き込みとwrite-through | ページ作成・編集 |
+| `schema_graph` | sourceに適用されたschema packの型一覧 | `GET /api/brains/{id}/page-types` |
+| `get_links` | brainhubが作成した状態辺の取得 | 編集画面の `superseded_by` |
+| `add_link` / `remove_link` | 状態辺の同期 | ページ保存後の `superseded_by` |
 
 ### OAuth 2.1
 
@@ -34,7 +37,7 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 |---|---|
 | `/.well-known/oauth-authorization-server` | ディスカバリ |
 | `/authorize` `/token` `/revoke` | ブラウザからの接続 |
-| `client_credentials` grant | brainhub 自身の読み取り |
+| `client_credentials` grant | brainhub 自身の読み取り、およびsource固定writerのread/write |
 | `authorization_code` + PKCE + `token_endpoint_auth_method=none` | Claude / ChatGPT からの接続 |
 | `--public-url` が discovery に反映される | 外部到達 |
 
@@ -42,9 +45,9 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 
 | 操作 | 用途 | 使用箇所 |
 |---|---|---|
-| `POST /admin/login` | bootstrap tokenを24時間のadmin cookieへ交換 | `adapter/gbrain/admin_client.go` |
-| `POST /admin/api/register-client` | 招待されたユーザー向けpublic OAuth client発行 | `POST /api/brains/{id}/clients` |
-| `POST /admin/api/revoke-client` | Client・Membership失効時のOAuth client失効 | `DELETE /api/clients/{id}` ほか |
+| `POST /admin/login` | bootstrap tokenを24時間のadmin cookieへ交換 | `api/adapter/gbrain/admin_client.go` |
+| `POST /admin/api/register-client` | 利用者向けpublic clientと、脳ごとのconfidential writer client発行 | client発行、Brain作成/adopt、writer再発行 |
+| `POST /admin/api/revoke-client` | 利用者clientの失効、writer再発行前の旧client失効 | `DELETE /api/clients/{id}`、`POST /api/brains/{id}/writer/reissue` |
 
 0.45.18.0ではadmin cookieに `Secure` と `Path=/admin` が付く。brainhubはCompose内部のHTTPで通信するため、レスポンスから取得したcookieをadmin APIリクエストへ明示的に付与する。
 
@@ -72,6 +75,13 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 4. **source id は `[a-z0-9-]{1,32}` で不変** — URL に使っている
 5. **source は git リポジトリである必要がある** — シムが `git init` する理由
 6. **`serve --http` が SSE を返す** — プロキシがバッファリングしない理由
+7. **`put_page` は `{slug, content}` で本文全体を受け取る** — `compiled_truth` と `timeline` の分離引数はない
+8. **`get_page` は `compiled_truth` / `timeline` / `frontmatter` / `content_hash` を分離して返す** — ただし `put_page` にhash/versionの事前条件はなく、楽観ロックは実装できない
+9. **`put_page` のwrite-throughは正本Markdownを書き、git commitする** — brainhubは `written` と `committed` の両方を成功条件にする
+10. **`schema_graph` は0ページのsourceでも適用packの型を返す** — 既存ページから型候補を推測しない
+11. **状態は明示的な `superseded_by` 辺が正** — `link_source=brainhub-web` の辺、frontmatter、本文の順で解釈し、本文中のStatus宣言は使わない
+
+writer clientは `issued_clients` に入れない。`issued_clients.write_source_id` は利用者へ渡すclientの権限境界であり、User/Membershipと共に失効する。Web編集用writerはbrainhub自身が脳ごとに1本保持し、暗号化secretと復旧状態を `brain_writer_clients` で管理する。
 
 ---
 
@@ -80,14 +90,14 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 上の表を、実際に動く GBrain に対して検証するテストを持つ。**アップグレードの可否をこれで判断する。**
 
 ```
-test/contract/gbrain_contract_test.go
+api/test/contract/gbrain_contract_test.go
 ```
 
 要件:
 
 - 実際に動いている GBrain（compose の `gbrain` サービス）に対して実行する
 - モックを使わない。**モックで通っても意味がない**
-- 通常の `go test ./...` からは除外し、タグかフラグで明示的に走らせる
+- 通常の `go -C api test ./...` からは除外し、タグかフラグで明示的に走らせる
 - 各テストは上の表の項目番号を参照するコメントを持つ
 - 「拒否されること」も検証する（例: `file://` が 400 を返す、`path` が MCP 経由で拒否される）
 
@@ -148,7 +158,7 @@ docker compose exec gbrain gbrain doctor --json
 ### 5. 契約テストを走らせる
 
 ```bash
-go test -tags=contract ./test/contract/...
+go -C api test -tags=contract ./test/contract/...
 ```
 
 **ここが判断点。**
@@ -170,17 +180,17 @@ docker compose build gbrain && docker compose up -d gbrain
 
 ## シムの扱い
 
-`shim/main.go` は、**GBrain が意図的に閉じた境界を、brainhub の責任で 1 箇所だけ開けたもの**である。存在理由は契約表の挙動 1 に依存している。
+`api/shim/main.go` は、**GBrain が意図的に閉じた境界を、brainhub の責任で 1 箇所だけ開けたもの**である。存在理由は契約表の挙動 1 に依存している。
 
 ### 現在の位置づけ
 
 - brainhub で唯一、GBrain の CLI を直接実行する場所
-- `usecase/output_port/source_provisioner.go` の背後にあり、**実装の差し替えは 1 ファイルで済む**
+- `api/usecase/output_port/source_provisioner.go` の背後にあり、**実装の差し替えは 1 ファイルで済む**
 - パスを外部から受け取らないため、GBrain が防いでいる攻撃（任意パスの登録）は成立しない
 
 ### 削除条件
 
-以下のいずれかが成立したら、シムを削除して `adapter/gbrain` の HTTP 実装に差し替える。
+以下のいずれかが成立したら、シムを削除して `api/adapter/gbrain` の HTTP 実装に差し替える。
 
 1. `/admin/api/` にローカルパスで source を作成できるエンドポイントが存在する
 2. MCP の `sources_add` が、ホスト内の許可されたルート配下に限って `path` を受け付けるようになる

@@ -8,7 +8,7 @@ Docker Compose.
 
 ## Commands
 
-- Go tests: `go test ./...`
+- Go tests: `go -C api test ./...`
 - Frontend type check: `npm --prefix web run check`
 - Frontend tests: `npm --prefix web test`
 - Frontend build: `npm --prefix web run build`
@@ -17,7 +17,7 @@ Docker Compose.
 
 ## Architecture
 
-### Go backend
+### Go backend (`api/`)
 
 - Dependency direction is `api / adapter -> usecase -> domain`.
 - Keep GBrain calls inside `adapter/gbrain`.
