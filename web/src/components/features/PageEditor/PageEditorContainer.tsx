@@ -13,6 +13,7 @@ import {
   listPages,
   listPageTypes,
   updatePage,
+  reissueWriter,
 } from "@/lib/brainApi";
 
 type EditorError = "forbidden" | "not-found" | "load" | "";
@@ -43,6 +44,8 @@ export function PageEditorContainer() {
   const [error, setError] = useState<EditorError>("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [writerRecoveryNeeded, setWriterRecoveryNeeded] = useState(false);
+  const [writerRecovering, setWriterRecovering] = useState(false);
 
   useEffect(() => {
     document.title = `${editing ? editSlug : "ページを作成"} — ${sourceID} — brainhub`;
@@ -104,6 +107,7 @@ export function PageEditorContainer() {
   async function save() {
     setSaving(true);
     setSaveError("");
+    setWriterRecoveryNeeded(false);
     try {
       const input = {
         title,
@@ -125,10 +129,37 @@ export function PageEditorContainer() {
       } else if (cause instanceof APIError && cause.status === 403) {
         setSaveError("この脳へ書き込む権限がありません。");
       } else {
-        setSaveError("保存できませんでした。GBrain と writer client の状態を確認してください。");
+        setWriterRecoveryNeeded(true);
+        setSaveError(
+          brain?.owner_id === shell.viewer?.id
+            ? "Writer client を利用できません。入力内容は保持されています。復旧してから保存し直してください。"
+            : "Writer client を利用できません。入力内容は保持されています。脳の owner に復旧を依頼してください。",
+        );
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function recoverWriter() {
+    if (brain?.owner_id !== shell.viewer?.id) return;
+    const confirmed = window.confirm(
+      "現在の Writer client を失効し、新しい client を発行します。ページ内容と git 履歴は失われません。続けますか？",
+    );
+    if (!confirmed) return;
+    setWriterRecovering(true);
+    setSaveError("");
+    try {
+      await reissueWriter(sourceID);
+      setWriterRecoveryNeeded(false);
+      setSaveError("Writer client を復旧しました。入力内容を確認して、もう一度保存してください。");
+      setBrain(await getBrain(sourceID));
+    } catch {
+      setSaveError(
+        "Writer client を復旧できませんでした。GBrain と暗号鍵の設定を確認してください。",
+      );
+    } finally {
+      setWriterRecovering(false);
     }
   }
 
@@ -154,6 +185,10 @@ export function PageEditorContainer() {
       showTimelineEntry={showTimelineEntry}
       saving={saving}
       saveError={saveError}
+      writerRecoveryNeeded={writerRecoveryNeeded}
+      writerRecovering={writerRecovering}
+      canRecoverWriter={brain?.owner_id === shell.viewer?.id}
+      onRecoverWriter={recoverWriter}
       onSlug={setSlug}
       onTitle={setTitle}
       onType={setType}
