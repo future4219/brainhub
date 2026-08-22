@@ -83,6 +83,32 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 
 writer clientは `issued_clients` に入れない。`issued_clients.write_source_id` は利用者へ渡すclientの権限境界であり、User/Membershipと共に失効する。Web編集用writerはbrainhub自身が脳ごとに1本保持し、暗号化secretと復旧状態を `brain_writer_clients` で管理する。
 
+### REST の読み取り資格情報（2026-08-22）
+
+`GET /api/brains/{source}/pages`、個別ページ、page-types、REST編集は、すべて `brain_writer_clients` に保存したsource別client（`read write`、write sourceとfederated readを同じsourceに固定）を使う。これは暫定的な迂回ではない。owner/editorの個別ページ取得とpage-typesは当初から同じclientを読み取りに使っており、一覧とviewer/非メンバーの個別取得をその既存経路へ揃えたものである。
+
+読み取り順序は次で固定する。
+
+1. `api/usecase/interactor/page.go` の `readAccess` がBrainの公開状態とmembershipを判定する
+2. 判定を通過した場合だけ、`api/adapter/gbrain/page_writer.go` がsource別clientを取得して `list_pages` / `get_page` を呼ぶ
+3. `list_pages` と `get_page` には `source_id` を明示する
+4. 非メンバーには設定されたpublic typeだけを返し、それ以外は404として扱う
+
+したがって、REST経路の認可の門は `readAccess` である。source別clientが `write` scopeも持つことを理由に、ハンドラーやadapterから直接呼び出してはならない。共通read clientはページ読み取りには使わないが、`POST /api/brains/{id}/adopt` の `sources_list` によるsource実在確認に引き続き必要なため残す。
+
+source別clientのGBrain上の名前は現在 `brainhub-writer-<source>` である。v0.46.28.0の利用中のAdmin APIにはclientのrename操作がなく、Brainhubのadapterもregister/revokeだけを契約としている。既存clientの名称変更にはrevokeとsecret再発行が必要で、認可境界は変わらない一方で全Brainを一時的にdegradedにし得る。このため名称だけの移行は行わず、DB上の名前は維持する。
+
+読み取り専用clientを別に持つC案は、scopeを変えるだけでは実現できない。次の6経路をまとめて整理する独立した設計変更として扱う。
+
+1. Brain作成・adopt時のsource client発行（`api/usecase/interactor/brain.go`）
+2. 起動時backfill（`api/main.go`、`api/adapter/gbrain/writer_service.go`）
+3. 個別ページGet（`api/usecase/interactor/page.go`）
+4. page-types（`api/usecase/interactor/page.go`）
+5. REST作成・編集（`api/usecase/interactor/page.go`）
+6. owner用の再発行endpoint（`api/api/router/router.go`、`api/usecase/interactor/brain.go`）
+
+AIクライアントの `/mcp` 経路は別である。`api/api/router/router.go` から `api/adapter/gbrain/proxy.go` のreverse proxyへ渡し、クライアント自身のBearer tokenを差し替えずGBrainへ透過する。認可はclient発行時のmembership確認と、membership削除時の該当client失効で担保する。REST用source clientをAIクライアントの代わりに使ってはならない。
+
 ---
 
 ## 契約テスト
