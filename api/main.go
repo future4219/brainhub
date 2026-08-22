@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	pageUseCase, err := interactor.NewPageUseCase(client, writerService, repositories, repositories, configuration.PublicPageTypes)
+	pageUseCase, err := interactor.NewPageUseCase(writerService, repositories, repositories, configuration.PublicPageTypes)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -49,6 +49,14 @@ func (s *WriterService) writerClient(ctx context.Context, brainID string, source
 	return newClient(s.baseURL, clientID, secret, "read write")
 }
 
+func (s *WriterService) List(ctx context.Context, brainID string, sourceID entity.SourceID) ([]entity.Page, error) {
+	client, err := s.writerClient(ctx, brainID, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	return client.List(ctx, sourceID)
+}
+
 func (s *WriterService) GetEditable(ctx context.Context, brainID string, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
 	client, err := s.writerClient(ctx, brainID, sourceID)
 	if err != nil {

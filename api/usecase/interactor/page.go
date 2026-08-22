@@ -15,7 +15,6 @@ import (
 const DefaultPublicPageTypes = "decision,idea,research,note,concept,analysis,project,report,person,task-list"
 
 type pageUseCase struct {
-	pages       output_port.PageRepository
 	editor      output_port.PageEditorRepository
 	brains      output_port.BrainRepository
 	memberships output_port.MembershipRepository
@@ -23,13 +22,12 @@ type pageUseCase struct {
 }
 
 func NewPageUseCase(
-	pages output_port.PageRepository,
 	editor output_port.PageEditorRepository,
 	brains output_port.BrainRepository,
 	memberships output_port.MembershipRepository,
 	publicPageTypes string,
 ) (input_port.PageUseCase, error) {
-	if pages == nil || editor == nil || brains == nil || memberships == nil {
+	if editor == nil || brains == nil || memberships == nil {
 		return nil, errors.New("all page dependencies are required")
 	}
 	allowed := make(map[string]struct{})
@@ -41,15 +39,15 @@ func NewPageUseCase(
 	if len(allowed) == 0 {
 		return nil, errors.New("at least one public page type is required")
 	}
-	return &pageUseCase{pages: pages, editor: editor, brains: brains, memberships: memberships, publicTypes: allowed}, nil
+	return &pageUseCase{editor: editor, brains: brains, memberships: memberships, publicTypes: allowed}, nil
 }
 
 func (u *pageUseCase) List(ctx context.Context, sourceID entity.SourceID, viewerID string) ([]entity.Page, error) {
-	_, role, err := u.readAccess(ctx, sourceID, viewerID)
+	brain, role, err := u.readAccess(ctx, sourceID, viewerID)
 	if err != nil {
 		return nil, err
 	}
-	pages, err := u.pages.List(ctx, sourceID)
+	pages, err := u.editor.List(ctx, brain.ID, sourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,12 +68,7 @@ func (u *pageUseCase) Get(ctx context.Context, sourceID entity.SourceID, slug, v
 	if err != nil {
 		return entity.PageDetail{}, err
 	}
-	var page entity.PageDetail
-	if role == entity.RoleOwner || role == entity.RoleEditor {
-		page, err = u.editor.GetEditable(ctx, brain.ID, sourceID, slug)
-	} else {
-		page, err = u.pages.Get(ctx, sourceID, slug)
-	}
+	page, err := u.editor.GetEditable(ctx, brain.ID, sourceID, slug)
 	if errors.Is(err, output_port.ErrNotFound) {
 		return entity.PageDetail{}, input_port.ErrPageNotFound
 	}

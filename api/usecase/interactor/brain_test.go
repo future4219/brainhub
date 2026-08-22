@@ -144,29 +144,33 @@ func (s *sourceCatalogMock) Exists(_ context.Context, sourceID entity.SourceID) 
 }
 
 type pagesMock struct {
-	called  bool
-	pages   []entity.Page
-	details []entity.PageDetail
-	puts    []entity.PageWrite
+	called       bool
+	listBrainID  string
+	listSourceID entity.SourceID
+	getBrainID   string
+	getSourceID  entity.SourceID
+	pages        []entity.Page
+	details      []entity.PageDetail
+	puts         []entity.PageWrite
 }
 
-func (p *pagesMock) List(context.Context, entity.SourceID) ([]entity.Page, error) {
+func (p *pagesMock) List(_ context.Context, brainID string, sourceID entity.SourceID) ([]entity.Page, error) {
 	p.called = true
+	p.listBrainID = brainID
+	p.listSourceID = sourceID
 	return p.pages, nil
 }
 
-func (p *pagesMock) Get(_ context.Context, _ entity.SourceID, slug string) (entity.PageDetail, error) {
+func (p *pagesMock) GetEditable(_ context.Context, brainID string, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
 	p.called = true
+	p.getBrainID = brainID
+	p.getSourceID = sourceID
 	for _, page := range p.details {
 		if page.Slug == slug {
 			return page, nil
 		}
 	}
 	return entity.PageDetail{}, output_port.ErrNotFound
-}
-
-func (p *pagesMock) GetEditable(ctx context.Context, _ string, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
-	return p.Get(ctx, sourceID, slug)
 }
 
 func (p *pagesMock) ListTypes(context.Context, string, entity.SourceID) ([]entity.PageType, error) {
@@ -377,14 +381,15 @@ func TestBrainVisibilityUsesMembership(t *testing.T) {
 }
 
 func TestPageAccessIsCheckedBeforeGBrain(t *testing.T) {
-	repositories := &brainRepositoriesMock{brains: []entity.Brain{{
-		ID: "private", SourceID: "private", Visibility: entconst.VisibilityPrivate, State: entconst.BrainStateReady,
-	}}}
+	repositories := &brainRepositoriesMock{brains: []entity.Brain{
+		{ID: "private", SourceID: "private", Visibility: entconst.VisibilityPrivate, State: entconst.BrainStateReady},
+		{ID: "public", SourceID: "public", Visibility: entconst.VisibilityPublic, State: entconst.BrainStateReady},
+	}}
 	pages := &pagesMock{pages: []entity.Page{
 		{Slug: "allowed", Type: "decision"},
 		{Slug: "internal", Type: "extract_receipt"},
 	}}
-	useCase, err := interactor.NewPageUseCase(pages, pages, repositories, repositories, interactor.DefaultPublicPageTypes)
+	useCase, err := interactor.NewPageUseCase(pages, repositories, repositories, interactor.DefaultPublicPageTypes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,6 +404,9 @@ func TestPageAccessIsCheckedBeforeGBrain(t *testing.T) {
 	if err != nil || len(visible) != 2 {
 		t.Fatalf("visible pages = %+v %v", visible, err)
 	}
+	if pages.listBrainID != "private" || pages.listSourceID != "private" {
+		t.Fatalf("list client scope = %q/%q; want private/private", pages.listBrainID, pages.listSourceID)
+	}
 	pages.details = []entity.PageDetail{
 		{Page: entity.Page{Slug: "allowed", Type: "decision"}, CompiledTruth: "body"},
 		{Page: entity.Page{Slug: "internal", Type: "extract_receipt"}, CompiledTruth: "secret"},
@@ -409,5 +417,23 @@ func TestPageAccessIsCheckedBeforeGBrain(t *testing.T) {
 	}
 	if internal, err := useCase.Get(context.Background(), "private", "internal", "reader"); err != nil || internal.CompiledTruth != "secret" {
 		t.Fatalf("internal page = %+v %v", internal, err)
+	}
+
+	public, err := useCase.List(context.Background(), "public", "stranger")
+	if err != nil || len(public) != 1 || public[0].Slug != "allowed" {
+		t.Fatalf("public pages = %+v %v", public, err)
+	}
+	if pages.listBrainID != "public" || pages.listSourceID != "public" {
+		t.Fatalf("public list client scope = %q/%q; want public/public", pages.listBrainID, pages.listSourceID)
+	}
+	detail, err = useCase.Get(context.Background(), "public", "allowed", "stranger")
+	if err != nil || detail.CompiledTruth != "body" {
+		t.Fatalf("public detail = %+v %v", detail, err)
+	}
+	if pages.getBrainID != "public" || pages.getSourceID != "public" {
+		t.Fatalf("public get client scope = %q/%q; want public/public", pages.getBrainID, pages.getSourceID)
+	}
+	if _, err := useCase.Get(context.Background(), "public", "internal", "stranger"); !errors.Is(err, input_port.ErrPageNotFound) {
+		t.Fatalf("non-public page error = %v; want not found", err)
 	}
 }
