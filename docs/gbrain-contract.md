@@ -31,6 +31,12 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 | `get_links` | brainhubが作成した状態辺の取得 | 編集画面の `superseded_by` |
 | `add_link` / `remove_link` | 状態辺の同期 | ページ保存後の `superseded_by` |
 
+#### `search` の source 境界（2026-08-23）
+
+GBrain v0.46.28.0 の MCP `search` には `source_id` 引数がない。呼び出しごとに source を指定して絞ることはできず、検索対象は OAuth client の `federatedRead` grant で決まる。`gbrain-evals-amara-v1` の調査では、`federatedRead=["gbrain-evals-amara-v1"]` の専用 client を発行して source を限定した。
+
+brainhub が将来検索機能を公開する場合、client の source grant が唯一の GBrain 側の門になる。HTTP request の source パラメータや brainhub 内の結果フィルタだけに依存せず、対象 source だけを grant された資格情報で GBrain の `search` を呼ぶこと。
+
 ### OAuth 2.1
 
 | | 用途 |
