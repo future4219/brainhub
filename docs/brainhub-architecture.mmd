@@ -1,0 +1,62 @@
+%%{init: {"themeVariables": {"fontFamily": "Yu Gothic, Meiryo, sans-serif"}}}%%
+flowchart TD
+  subgraph Clients["クライアント"]
+    direction LR
+    Browser["ブラウザ<br/>管理・公開ページ閲覧"]
+    AI["AIクライアント<br/>Codex / Claude / ChatGPT"]
+  end
+
+  subgraph Public["公開エンドポイント"]
+    direction LR
+    Web["web<br/>Vite + React + Nginx<br/>:3000"]
+    API["brainhub<br/>Go API + MCP/OAuthプロキシ<br/>:8080"]
+  end
+
+  subgraph Runtime["Docker内部ネットワーク"]
+    direction LR
+    GBrain["GBrain<br/>MCP / OAuth / 検索 / write-through<br/>:3131"]
+    Shim["Source作成シム<br/>:8081"]
+    Autopilot["GBrain autopilot<br/>default Sourceの保守"]
+    Postgres[("PostgreSQL + pgvector<br/>GBrain DB + Brainhub DB<br/>永続化pgdata")]
+  end
+
+  subgraph Storage["ホスト永続化Sourceリポジトリ"]
+    Sources[("brains/&lt;source&gt;<br/>Sourceごとに1つのMarkdown + Gitリポジトリ<br/>brainhub / brainhub-new / その他")]
+  end
+
+  subgraph External["外部サービス"]
+    direction LR
+    Models["OpenAI / Anthropic"]
+    GitHub["GitHubリモート"]
+  end
+
+  Browser -->|"UI"| Web
+  Web -->|"/api"| API
+  AI ==>|"Streamable HTTP MCP<br/>OAuthまたはSource限定Bearer"| API
+
+  API ==>|"MCPリバースプロキシ + 内部ページ操作<br/>OAuth discovery / tokenルート"| GBrain
+  API -->|"ユーザー / メンバーシップ<br/>Brain・Clientメタデータ"| Postgres
+  API -->|"Sourceを作成"| Shim
+
+  GBrain -->|"索引 / ベクトル / 認証"| Postgres
+  GBrain -->|"読み書き / Gitコミット"| Sources
+  Shim -->|"mkdir + git init"| Sources
+  Shim -->|"gbrain sources add"| GBrain
+  Autopilot -->|"/brainを保守"| Sources
+  Autopilot --> Postgres
+
+  GBrain -.->|"埋め込み / LLM"| Models
+  Autopilot -.-> Models
+  Sources -.->|"git push"| GitHub
+
+  classDef client fill:#e8f1ff,stroke:#2457a7,color:#10233f
+  classDef edge fill:#e9f8ef,stroke:#26734d,color:#173d2b
+  classDef internal fill:#fff3d8,stroke:#9a6700,color:#3d2b00
+  classDef data fill:#f3e8ff,stroke:#7442a8,color:#2d1647
+  classDef external fill:#f4f4f5,stroke:#666666,color:#222222
+
+  class Browser,AI client
+  class Web,API edge
+  class GBrain,Shim,Autopilot internal
+  class Postgres,Sources data
+  class Models,GitHub external
