@@ -30,6 +30,10 @@ type Props = {
   showTimelineEntry: boolean;
   saving: boolean;
   saveError: string;
+  writerRecoveryNeeded: boolean;
+  writerRecovering: boolean;
+  canRecoverWriter: boolean;
+  onRecoverWriter: () => void;
   onSlug: (value: string) => void;
   onTitle: (value: string) => void;
   onType: (value: string) => void;
@@ -173,7 +177,25 @@ export function PageEditorPresenter(props: Props) {
           <Feedback kind="info" className="mt-6">
             同時編集の検出機能はありません。CLI や接続された AI からも更新されるため、保存前に最新内容を確認してください。
           </Feedback>
-          {props.saveError && <Feedback kind="error" className="mt-4">{props.saveError}</Feedback>}
+          {props.saveError && (
+            <Feedback
+              kind={props.writerRecoveryNeeded ? "error" : "info"}
+              className="mt-4"
+            >
+              <div>{props.saveError}</div>
+              {props.writerRecoveryNeeded && props.canRecoverWriter && (
+                <Button
+                  className="mt-3"
+                  variant="outline"
+                  type="button"
+                  disabled={props.writerRecovering || props.saving}
+                  onClick={props.onRecoverWriter}
+                >
+                  {props.writerRecovering ? "復旧中…" : "Writer client を復旧"}
+                </Button>
+              )}
+            </Feedback>
+          )}
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="outline" type="button" disabled={props.saving} onClick={props.onCancel}>キャンセル</Button>
             <Button type="submit" disabled={props.saving || props.pageTypes.length === 0}>{props.saving ? "保存中…" : "保存"}</Button>
