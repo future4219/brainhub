@@ -70,6 +70,76 @@ brainhub が将来検索機能を公開する場合、client の source grant �
 | `search.mode` | 検索精度とコスト |
 | `mcp.publish_skills` | 繋いだ AI にスキルが配られるか |
 | `GBRAIN_SKILLS_DIR` | 未設定だと `list_skills` が空になる |
+| `autopilot.auto_drain.enabled=false` | source単位の除外機能がないv0.46.28.0で、全sourceへのatom自動生成を止める |
+
+### Autopilotのマルチテナント運用方針（2026-08-23）
+
+v0.46.28.0のauto-drainはfederationを参照せず、条件を満たす全sourceを`extract-atoms-drain`の対象にする。source単位のallow/deny設定がないため、マルチテナントでユーザーのsourceへ意図しないatomページとLLMコストを発生させないよう、brain全体で無効にする。
+
+```bash
+gbrain config set autopilot.auto_drain.enabled false
+```
+
+2026-08-23に設定値が`false`であることを確認し、停止中だった`extract-atoms-drain` job #5565をcancelしてからautopilotを再開した。10分間の観察では新しい`extract-atoms-drain` jobは0件で、`gbrain-evals-amara-v1`は467ページのままだった。ただし、この設定が止めるのはauto-drainだけである。通常の`sync`とsource fan-outの`autopilot-cycle`はeval sourceにも投入された。
+
+上流にはsource単位の除外設定を求めるissueを出す予定である。除外設定が実装されたら、必要なsourceだけauto-drainを有効に戻せるか再検討する。
+
+既知の運用状態として、`brainhub-new`、`sakaihayate`、`ui-check-20260815`は未同期のままで、`gbrain doctor`の`sync_freshness`をFAILにする。owner判断まではsyncも削除もしない。
+
+`gbrain-evals-amara-v1`はMIT Licenseの[gbrain-evals](https://github.com/garrytan/gbrain-evals)由来のテストデータであり、本番データではない。ベンチマークと負荷確認のため467ページを残す。このうち27ページのatomは、auto-drainがマルチテナントsourceへ自動生成した挙動の実測データとして意図的に残す。
+
+#### Upstream issue draft（未投稿）
+
+**Title: Allow autopilot auto-drain to exclude specific sources**
+
+```markdown
+## Problem
+
+In GBrain v0.46.28.0, autopilot auto-drain considers every eligible,
+non-archived source returned by `loadAllSources()`. Source federation is not
+part of the selection criteria, and the available auto-drain configuration
+only covers `enabled`, `window_seconds`, `threshold`, and
+`max_usd_per_day`.
+
+This is problematic when GBrain is hosted as a multi-tenant service, with one
+source per customer or team. A tenant may create or import a source without
+expecting the host's autopilot to generate additional atom pages or incur LLM
+cost on that source.
+
+## Observed behavior
+
+We imported a 424-page MIT-licensed evaluation corpus into a dedicated test
+source. Although that source was not intended for automatic enrichment,
+autopilot dispatched:
+
+    [dispatch] job #5565 extract-atoms-drain (auto-drain: gbrain-evals-amara-v1; backlog=98)
+
+Before autopilot was stopped, the job generated 27 atom pages in the test
+source. This was a real multi-tenant hosting setup, not a single-repository
+local brain: Brainhub hosts multiple independently permissioned sources for
+different users and teams in one GBrain deployment.
+
+## Current mitigation
+
+Because v0.46.28.0 has no source-level exclusion, we currently disable
+auto-drain for the entire brain:
+
+    gbrain config set autopilot.auto_drain.enabled false
+
+This prevents unintended pages and cost, but also disables auto-drain for the
+production source where it may be desirable.
+
+## Proposal
+
+Please add a source-level allow/deny mechanism, either in source config or in
+the autopilot auto-drain config. For example:
+
+    autopilot.auto_drain.exclude_sources:
+      - gbrain-evals-amara-v1
+
+An allow-list would also work. The important property is that a multi-tenant
+host can opt individual sources out without disabling auto-drain brain-wide.
+```
 
 ### 依存している「挙動」
 
