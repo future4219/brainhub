@@ -145,7 +145,7 @@ func (c *Client) List(ctx context.Context, sourceID entity.SourceID) ([]entity.P
 				UpdatedAt: page.UpdatedAt,
 			})
 		}
-		if len(batch) < pageLimit {
+		if len(batch) == 0 {
 			return pages, nil
 		}
 	}

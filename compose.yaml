@@ -16,7 +16,7 @@ services:
       retries: 15
 
   gbrain:
-    image: brainhub-gbrain:v0.45.18.0
+    image: brainhub-gbrain:v0.46.28.0
     container_name: brainhub-gbrain
     restart: unless-stopped
     build:
@@ -41,7 +41,6 @@ services:
       - --port
       - "3131"
       - --public-url
-      - https://numerical-homeland-ash-payroll.trycloudflare.com
       - ${GBRAIN_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - /home/futur/dev/brainhub-data/gbrain-home:/var/lib/gbrain-home
@@ -58,7 +57,7 @@ services:
       retries: 12
 
   shim:
-    image: brainhub-gbrain-shim:v0.45.12.0
+    image: brainhub-gbrain-shim:v0.46.28.0
     container_name: brainhub-gbrain-shim
     restart: unless-stopped
     build:
@@ -80,7 +79,7 @@ services:
       - /home/futur/dev/brainhub-data/brains:/brains
 
   autopilot:
-    image: brainhub-gbrain:v0.45.18.0
+    image: brainhub-gbrain:v0.46.28.0
     container_name: brainhub-gbrain-autopilot
     restart: unless-stopped
     depends_on:

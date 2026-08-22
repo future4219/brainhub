@@ -103,11 +103,16 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 				t.Errorf("Authorization = %q", got)
 			}
 
-			end := offset + pageLimit
-			if end > len(allPages) {
-				end = len(allPages)
+			var batch []upstreamPage
+			if offset < len(allPages) {
+				end := min(offset+pageLimit, len(allPages))
+				batch = allPages[offset:end]
+				if offset == 0 {
+					// Simulate visibility filtering after limit/offset.
+					batch = batch[:len(batch)-1]
+				}
 			}
-			pageJSON, _ := json.Marshal(allPages[offset:end])
+			pageJSON, _ := json.Marshal(batch)
 			envelope, _ := json.Marshal(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      offset + 1,
@@ -131,8 +136,8 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pages) != 139 {
-		t.Fatalf("pages = %d; want 139", len(pages))
+	if len(pages) != 138 {
+		t.Fatalf("pages = %d; want 138", len(pages))
 	}
 	if got := atomic.LoadInt32(&discoveryRequests); got != 1 {
 		t.Errorf("discovery requests = %d; want 1", got)
@@ -143,7 +148,7 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	offsetsMu.Lock()
 	gotOffsets := append([]int(nil), offsets...)
 	offsetsMu.Unlock()
-	if want := []int{0, 100, 100}; !reflect.DeepEqual(gotOffsets, want) {
+	if want := []int{0, 100, 100, 200}; !reflect.DeepEqual(gotOffsets, want) {
 		t.Errorf("offsets = %v; want %v", gotOffsets, want)
 	}
 }
