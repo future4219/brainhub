@@ -35,16 +35,11 @@ export function BrainListPresenter({
   onQuery,
   ...shell
 }: BrainListPresenterProps) {
-  const sidebarBrains = (brains ?? []).map((brain) => ({
-    name: brain.source_id,
-    href: brainUrl(brain.source_id),
-    state: brain.state,
-  }));
   return (
     <AppShell
       {...shell}
       crumbs={["脳"]}
-      brains={sidebarBrains}
+      brains={brains}
       search={{ value: query, placeholder: "脳を検索", onChange: onQuery }}
     >
       <main className="w-full px-4 pb-20 pt-8 sm:px-8">
