@@ -95,10 +95,22 @@ func TestWriterServiceKeepsOnePersistentClientAndReissuesExplicitly(t *testing.T
 	if admin.registered != 1 {
 		t.Fatalf("active writer was registered again: %d", admin.registered)
 	}
+	firstClient, err := service.writerClient(context.Background(), "brain-id", "brainhub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondClient, err := service.writerClient(context.Background(), "brain-id", "brainhub")
+	if err != nil || secondClient != firstClient {
+		t.Fatalf("writer client was not reused: same=%t err=%v", secondClient == firstClient, err)
+	}
 	if err := service.Reissue(context.Background(), "brain-id", "brainhub"); err != nil {
 		t.Fatal(err)
 	}
 	if admin.registered != 2 || len(admin.revoked) != 1 || admin.revoked[0] != firstID || *repository.client.GBrainClientID == firstID {
 		t.Fatalf("registered=%d revoked=%v client=%#v", admin.registered, admin.revoked, repository.client)
+	}
+	reissuedClient, err := service.writerClient(context.Background(), "brain-id", "brainhub")
+	if err != nil || reissuedClient == firstClient {
+		t.Fatalf("reissued writer client was not refreshed: same=%t err=%v", reissuedClient == firstClient, err)
 	}
 }

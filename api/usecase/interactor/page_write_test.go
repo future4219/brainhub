@@ -23,7 +23,7 @@ func TestPageUpdateAppendsTimelineAndPreservesFrontmatter(t *testing.T) {
 		CompiledTruth: "old truth", Timeline: "2026-08-16 initial",
 		Frontmatter: map[string]any{"owner": "brainhub"},
 	}}}
-	useCase, err := interactor.NewPageUseCase(pages, pages, repositories, repositories, interactor.DefaultPublicPageTypes)
+	useCase, err := interactor.NewPageUseCase(pages, repositories, repositories, interactor.DefaultPublicPageTypes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestPageWriteAuthorizationBeforeGBrain(t *testing.T) {
 		memberships: []entity.Membership{{BrainID: "brain-id", UserID: "reader", Role: entity.RoleReader}},
 	}
 	pages := &pagesMock{}
-	useCase, err := interactor.NewPageUseCase(pages, pages, repositories, repositories, interactor.DefaultPublicPageTypes)
+	useCase, err := interactor.NewPageUseCase(pages, repositories, repositories, interactor.DefaultPublicPageTypes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestPageCreateUsesSchemaTypesAndRejectsDuplicate(t *testing.T) {
 		memberships: []entity.Membership{{BrainID: "brain-id", UserID: "owner", Role: entity.RoleOwner}},
 	}
 	pages := &pagesMock{}
-	useCase, err := interactor.NewPageUseCase(pages, pages, repositories, repositories, interactor.DefaultPublicPageTypes)
+	useCase, err := interactor.NewPageUseCase(pages, repositories, repositories, interactor.DefaultPublicPageTypes)
 	if err != nil {
 		t.Fatal(err)
 	}

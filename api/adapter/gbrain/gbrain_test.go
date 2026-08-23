@@ -20,14 +20,14 @@ import (
 	"brainhub/usecase/output_port"
 )
 
-func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
+func TestClientListsEveryPageAcrossSixBatchesAndRefreshesToken(t *testing.T) {
 	var tokenRequests int32
 	var discoveryRequests int32
 	var offsetsMu sync.Mutex
 	var offsets []int
 	var upstream *httptest.Server
 
-	allPages := make([]upstreamPage, 140)
+	allPages := make([]upstreamPage, 451)
 	for i := range allPages {
 		sourceID := "brainhub"
 		if i == len(allPages)-1 {
@@ -81,8 +81,8 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 			if request.Params.Name != "list_pages" {
 				t.Errorf("unexpected tool: %s", request.Params.Name)
 			}
-			if len(request.Params.Arguments) != 2 {
-				t.Errorf("list_pages arguments = %v; want only limit and offset", request.Params.Arguments)
+			if len(request.Params.Arguments) != 3 || request.Params.Arguments["source_id"] != "brainhub" {
+				t.Errorf("list_pages arguments = %v; want limit, offset, and source_id", request.Params.Arguments)
 			}
 			if _, ok := request.Params.Arguments["sort"]; ok {
 				t.Error("list_pages must not send sort")
@@ -136,8 +136,8 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pages) != 138 {
-		t.Fatalf("pages = %d; want 138", len(pages))
+	if len(pages) != 449 {
+		t.Fatalf("pages = %d; want 449", len(pages))
 	}
 	if got := atomic.LoadInt32(&discoveryRequests); got != 1 {
 		t.Errorf("discovery requests = %d; want 1", got)
@@ -148,7 +148,9 @@ func TestClientListsEveryPageAndRefreshesToken(t *testing.T) {
 	offsetsMu.Lock()
 	gotOffsets := append([]int(nil), offsets...)
 	offsetsMu.Unlock()
-	if want := []int{0, 100, 100, 200}; !reflect.DeepEqual(gotOffsets, want) {
+	// Six logical batches (five non-empty plus the terminating empty batch),
+	// with offset 100 retried once after the simulated 401.
+	if want := []int{0, 100, 100, 200, 300, 400, 500}; !reflect.DeepEqual(gotOffsets, want) {
 		t.Errorf("offsets = %v; want %v", gotOffsets, want)
 	}
 }
@@ -217,7 +219,7 @@ func TestClientGetsPageWithinRequestedSource(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Fatal(err)
 			}
-			if request.Params.Name != "get_page" || len(request.Params.Arguments) != 1 {
+			if request.Params.Name != "get_page" || len(request.Params.Arguments) != 2 || request.Params.Arguments["source_id"] != "brainhub" {
 				t.Errorf("tool/arguments = %q %v", request.Params.Name, request.Params.Arguments)
 			}
 			slug, _ := request.Params.Arguments["slug"].(string)

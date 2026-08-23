@@ -1,20 +1,22 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { Button, buttonVariants } from "@/components/ui/Button";
-import { appUrl } from "@/config/url";
+import { appUrl, brainUrl } from "@/config/url";
 import type { ViewerState } from "@/entities/user/entity";
 import { cn } from "@/lib/utils";
 
 type AppShellProps = ViewerState & {
   crumbs: string[];
-  brains?: { name: string; href: string; state: string; active?: boolean }[];
   search?: { value: string; placeholder: string; onChange: (value: string) => void };
   onLogout: () => void;
   children: ReactNode;
 };
 
-export function AppShell({ viewer, sessionUnavailable, crumbs, brains = [], search, onLogout, children }: AppShellProps) {
+export function AppShell({ viewer, brains, sessionUnavailable, crumbs, search, onLogout, children }: AppShellProps) {
+  const { sourceID } = useParams<{ sourceID: string }>();
+  const sidebarBrains = brains ?? [];
+
   return (
     <div className="flex min-h-screen bg-canvas text-text">
       <aside className="sticky top-0 hidden h-screen w-sidebar shrink-0 flex-col border-r border-border bg-sidebar md:flex">
@@ -26,17 +28,17 @@ export function AppShell({ viewer, sessionUnavailable, crumbs, brains = [], sear
           <Link className="flex min-h-control items-center gap-2 rounded-control bg-surface-selected px-3 text-ui" to={appUrl.brainList}>
             <span className="font-mono text-xs text-text-muted">▤</span>
             <span className="flex-1">脳</span>
-            <span className="font-mono text-xs text-text-muted">{brains.length || ""}</span>
+            <span className="font-mono text-xs text-text-muted">{sidebarBrains.length || ""}</span>
           </Link>
         </nav>
-        {brains.length > 0 && (
+        {sidebarBrains.length > 0 && (
           <div className="mt-4">
             <p className="px-4 pb-2 font-mono text-xs uppercase tracking-section text-text-muted">brains</p>
             <div className="px-2">
-              {brains.map((brain) => (
-                <Link className={cn("flex min-h-control items-center gap-2 rounded-control px-3 font-mono text-sm text-text-secondary hover:bg-surface-selected hover:text-text", brain.active && "bg-surface-selected text-text")} to={brain.href} key={brain.href}>
+              {sidebarBrains.map((brain) => (
+                <Link className={cn("flex min-h-control items-center gap-2 rounded-control px-3 font-mono text-sm text-text-secondary hover:bg-surface-selected hover:text-text", brain.source_id === sourceID && "bg-surface-selected text-text")} to={brainUrl(brain.source_id)} key={brain.id}>
                   <span className="sidebar-state-dot" data-state={brain.state} aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate">{brain.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{brain.source_id}</span>
                   <span className="text-xs text-text-muted">[{brain.state}]</span>
                 </Link>
               ))}

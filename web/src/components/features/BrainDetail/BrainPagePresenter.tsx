@@ -6,7 +6,7 @@ import { BrainDetailLayout } from "@/components/features/BrainDetail/BrainDetail
 import { buttonVariants } from "@/components/ui/Button";
 import { Feedback } from "@/components/ui/Feedback";
 import { Panel } from "@/components/ui/Panel";
-import { brainUrl, editPageUrl } from "@/config/url";
+import { brainUrl, editPageUrl, markdownPageHref } from "@/config/url";
 import type { Brain, PageDetail } from "@/entities/brain/entity";
 import type { ViewerState } from "@/entities/user/entity";
 import { formatDate } from "@/lib/format";
@@ -77,7 +77,7 @@ export function BrainPagePresenter({
           </header>
           <Panel className="mt-6 overflow-hidden">
             {page.compiled_truth ? (
-              <MarkdownPreview>{page.compiled_truth}</MarkdownPreview>
+              <MarkdownPreview sourceID={sourceID}>{page.compiled_truth}</MarkdownPreview>
             ) : (
               <Feedback kind="empty">本文がありません。</Feedback>
             )}
@@ -87,7 +87,7 @@ export function BrainPagePresenter({
               <h3 className="border-b border-border px-6 py-3 font-mono text-xs uppercase tracking-label text-text-muted">
                 timeline
               </h3>
-              <MarkdownPreview>{page.timeline}</MarkdownPreview>
+              <MarkdownPreview sourceID={sourceID}>{page.timeline}</MarkdownPreview>
             </Panel>
           )}
         </article>
@@ -96,10 +96,19 @@ export function BrainPagePresenter({
   );
 }
 
-function MarkdownPreview({ children }: { children: string }) {
+function MarkdownPreview({ children, sourceID }: { children: string; sourceID: string }) {
   return (
     <div className="markdown-preview">
-      <Markdown remarkPlugins={[remarkGfm]}>{children}</Markdown>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ node: _node, href, ...props }) => (
+            <a {...props} href={markdownPageHref(sourceID, href)} />
+          ),
+        }}
+      >
+        {children}
+      </Markdown>
     </div>
   );
 }

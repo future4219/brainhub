@@ -17,9 +17,10 @@ type WriterService struct {
 	clock       output_port.Clock
 	baseURL     string
 
-	// ponytail: one brainhub process currently handles low-volume provisioning;
+	// ponytail: one brainhub process currently handles low-volume writer setup;
 	// replace this with a DB lease before running multiple API replicas.
-	mu sync.Mutex
+	mu      sync.Mutex
+	clients map[string]*Client
 }
 
 func NewWriterService(baseURL string, admin output_port.GBrainAdmin, credentials output_port.BrainWriterClientRepository, clock output_port.Clock, encodedKey string) (*WriterService, error) {
@@ -30,7 +31,10 @@ func NewWriterService(baseURL string, admin output_port.GBrainAdmin, credentials
 	if err != nil {
 		return nil, err
 	}
-	return &WriterService{baseURL: baseURL, admin: admin, credentials: credentials, cipher: cipher, clock: clock}, nil
+	return &WriterService{
+		baseURL: baseURL, admin: admin, credentials: credentials, cipher: cipher, clock: clock,
+		clients: make(map[string]*Client),
+	}, nil
 }
 
 func (s *WriterService) Provision(ctx context.Context, brainID string, sourceID entity.SourceID) error {
@@ -105,6 +109,7 @@ func (s *WriterService) Reissue(ctx context.Context, brainID string, sourceID en
 	if stored.WriteSourceID != sourceID {
 		return errors.New("brain writer source does not match brain source")
 	}
+	delete(s.clients, brainID+":"+sourceID.String())
 	if stored.GBrainClientID != nil {
 		if err := s.admin.RevokeClient(ctx, *stored.GBrainClientID); err != nil {
 			_, markErr := s.credentials.MarkBrainWriterClientOrphan(ctx, brainID, stored.GBrainClientID, "revoke writer client: "+err.Error())

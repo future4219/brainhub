@@ -35,17 +35,6 @@ export function BrainDetailLayout({
   search,
   children,
 }: BrainDetailLayoutProps) {
-  const sidebarBrains = detail.brain
-    ? [
-        {
-          name: detail.brain.source_id,
-          href: brainUrl(detail.brain.source_id),
-          state: detail.brain.state,
-          active: true,
-        },
-      ]
-    : [];
-
   return (
     <AppShell
       {...shell}
@@ -57,7 +46,6 @@ export function BrainDetailLayout({
             ? "接続"
             : "招待",
       ]}
-      brains={sidebarBrains}
       search={search}
     >
       <main className="w-full px-4 pb-20 pt-8 sm:px-8">

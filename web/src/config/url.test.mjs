@@ -5,6 +5,7 @@ import {
   brainUrl,
   invitationUrl,
   editPageUrl,
+  markdownPageHref,
   newPageUrl,
   pageUrl,
 } from "./url.ts";
@@ -16,6 +17,10 @@ assert.equal(brainTab("?connect=1"), "connect");
 assert.equal(brainUrl("brainhub", "connect"), "/brains/brainhub?tab=connect");
 assert.equal(invitationUrl("a/b"), "/invite/a%2Fb");
 assert.equal(pageUrl("brainhub", "decisions/a b"), "/brains/brainhub/pages/decisions/a%20b");
+assert.equal(markdownPageHref("eval", "people/tomoko-sato"), "/brains/eval/pages/people/tomoko-sato");
+assert.equal(markdownPageHref("eval", "people/tomoko-sato#bio"), "/brains/eval/pages/people/tomoko-sato#bio");
+assert.equal(markdownPageHref("eval", "https://example.test/person"), "https://example.test/person");
+assert.equal(markdownPageHref("eval", "#orange-mode"), "#orange-mode");
 assert.equal(newPageUrl("brainhub"), "/brains/brainhub/page-editor/new");
 assert.equal(editPageUrl("brainhub", "decisions/a b"), "/brains/brainhub/page-editor/edit/decisions/a%20b");
 assert.equal(safeNextPath("?next=%2Finvite%2Fabc", "/"), "/invite/abc");

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"brainhub/api/middleware"
@@ -139,6 +140,7 @@ func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		log.Printf("list pages source=%q: %v", sourceID, err)
 		http.Error(w, "failed to list pages", http.StatusBadGateway)
 		return
 	}
@@ -174,6 +176,7 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		log.Printf("get page source=%q slug=%q: %v", sourceID, slug, err)
 		http.Error(w, "failed to get page", http.StatusBadGateway)
 		return
 	}

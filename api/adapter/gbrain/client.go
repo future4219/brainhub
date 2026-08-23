@@ -130,7 +130,7 @@ func newClient(baseURL, clientID, clientSecret, scopes string) (*Client, error) 
 func (c *Client) List(ctx context.Context, sourceID entity.SourceID) ([]entity.Page, error) {
 	var pages []entity.Page
 	for offset := 0; ; offset += pageLimit {
-		batch, err := c.listPageBatch(ctx, offset)
+		batch, err := c.listPageBatch(ctx, sourceID, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +152,7 @@ func (c *Client) List(ctx context.Context, sourceID entity.SourceID) ([]entity.P
 }
 
 func (c *Client) Get(ctx context.Context, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
-	response, err := c.callTool(ctx, 1, "get_page", map[string]any{"slug": slug})
+	response, err := c.callTool(ctx, 1, "get_page", map[string]any{"slug": slug, "source_id": sourceID.String()})
 	if err != nil {
 		return entity.PageDetail{}, err
 	}
@@ -223,10 +223,11 @@ func (c *Client) Exists(ctx context.Context, sourceID entity.SourceID) (bool, er
 	return false, nil
 }
 
-func (c *Client) listPageBatch(ctx context.Context, offset int) ([]upstreamPage, error) {
+func (c *Client) listPageBatch(ctx context.Context, sourceID entity.SourceID, offset int) ([]upstreamPage, error) {
 	response, err := c.callTool(ctx, offset+1, "list_pages", map[string]any{
-		"limit":  pageLimit,
-		"offset": offset,
+		"limit":     pageLimit,
+		"offset":    offset,
+		"source_id": sourceID.String(),
 	})
 	if err != nil {
 		return nil, err

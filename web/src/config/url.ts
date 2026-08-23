@@ -26,6 +26,13 @@ export function pageUrl(sourceID: string, slug: string): string {
   return `/brains/${encodeURIComponent(sourceID)}/pages/${encodedSlug}`;
 }
 
+export function markdownPageHref(sourceID: string, href?: string): string | undefined {
+  if (!href || /^[a-z][a-z\d+.-]*:/i.test(href) || /^[/?#]/.test(href)) return href;
+  const suffixAt = href.search(/[?#]/);
+  const slug = (suffixAt < 0 ? href : href.slice(0, suffixAt)).replace(/^\.\//, "");
+  return pageUrl(sourceID, slug) + (suffixAt < 0 ? "" : href.slice(suffixAt));
+}
+
 export function newPageUrl(sourceID: string): string {
   return `/brains/${encodeURIComponent(sourceID)}/page-editor/new`;
 }

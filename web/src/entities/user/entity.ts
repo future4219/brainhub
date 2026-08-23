@@ -1,3 +1,5 @@
+import type { Brain } from "@/entities/brain/entity";
+
 export type User = {
   id: string;
   email: string;
@@ -9,6 +11,7 @@ export type User = {
 
 export type ViewerState = {
   viewer: User | null | undefined;
+  brains: Brain[] | null;
   sessionUnavailable: boolean;
   onLogout: () => void;
 };
