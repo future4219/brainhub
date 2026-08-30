@@ -41,7 +41,7 @@ export function CreateBrainPresenter({
   const sourceIDHint =
     name.trim() && !sourceID
       ? "半角英数字で入力してください"
-      : "あとから変更できません";
+      : "この脳のURLの末尾です。半角英数字とハイフンが使え、作成後は変更できません。";
 
   return (
     <AppShell {...shell} crumbs={["脳", "新しい脳"]}>
