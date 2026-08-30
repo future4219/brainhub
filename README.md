@@ -36,8 +36,8 @@
 |---|---|
 | Markdown 保存と git 自動 commit | 公開ページ（接続前に中身を読む場所） |
 | 検索・埋め込み・関係グラフ | 招待画面（`auth register-client` の Web 版） |
-| MCP エンドポイントと OAuth 2.1 | 編集画面（`put_page` の Web 版） |
-| クライアント発行・スコープ・失効 | 自ドメインのプロキシ |
+| MCPツール、source grant、backend用OAuth client | 利用者向けOAuth 2.1、認可プロキシ、編集画面 |
+| reader/writer発行・source grant・失効 | Membership照合と利用者MCP token |
 | 領域ごとの source と横断読み取り | 脳の一覧・作成画面 |
 | スキル配信（`mcp.publish_skills`） | **ユーザーという概念** |
 | 夜間の自動整理・健康診断 | 誰がどの脳を所有するかの記録 |
@@ -79,7 +79,7 @@ Codex / Claude ── brainhub（API・MCPプロキシ）
 - **source 分離** — ひとつの GBrain 内で領域ごとに source を分ける。git リポジトリも分かれる。組み合わせは `--federated-read` で行う。
 - **runtime 分離** — 脳ごとに DB / MCP ランタイム / 認証基盤を分ける。
 
-**当面はすべて source 分離で運用する。** 複数ユーザーも source 分離で成立する（GBrain は全テーブルに RLS が有効）。brainhub 側は `users` / `source_ownership` / `issued_clients` を持ち、誰にどのクライアントを発行したかを記録する。
+**当面はすべて source 分離で運用する。** 複数ユーザーも source 分離で成立する（GBrain は全テーブルに RLS が有効）。brainhub 側は `users` / `memberships` を権限の正とし、利用者ごとのMCP tokenとGBrain reader clientを管理する。
 
 runtime 分離が必要になるのは、他者のデータを同一 DB に置けないという要求が出たときだけである。分離を強めるほど横断読み取りが難しくなるため、必要のない分離は行わない。
 
@@ -181,12 +181,15 @@ docker compose exec gbrain gbrain sources harden brainhub --pat-file /var/lib/gb
 
 ### クライアントの接続
 
-```bash
-docker compose exec gbrain gbrain auth create "codex"
-codex mcp add gbrain --url http://localhost:8080/mcp --bearer-token-env-var GBRAIN_TOKEN
-```
+脳の「接続」タブで利用者ごとのClaude Web Client IDを発行し、MCP URLと一緒にClaudeのカスタムコネクタへ設定する。public clientのためsecretはない。初回接続時はbrainhubの認可画面へログインし、現在見られる脳への読み取りを許可する。
 
-`list_skills` が件数を返せば、スキル（知識の引き方）も配信されている。
+接続は脳ごとではなく利用者ごとに1本である。各MCPリクエストで現在のMembershipと `public + ready` を読み直すため、所属や脳が増減しても接続し直さない。`list_skills` が件数を返せば、スキル（知識の引き方）も配信されている。
+
+GBrainの未知パラメータ無視による権限漏れを防ぐため、DB planeの設定は次で固定する。
+
+```bash
+docker compose exec gbrain gbrain config set mcp.strict_params reject
+```
 
 ### brainhub API
 
@@ -203,7 +206,7 @@ REVOKE ALL PRIVILEGES ON DATABASE gbrain FROM brainhub;
 
 APIコンテナはGBrainへ `http://gbrain:3131`、シムへ `http://shim:8081`、brainhub databaseへ `postgres:5432` で接続する。これらの内部URLはComposeが設定するため、`.env` でホスト用URLを二重管理しない。
 
-GBrainのOAuth discoveryには `GBRAIN_PUBLIC_URL` がissuerとして載る。公開先を変更するときは、`PUBLIC_MCP_URL` を同じoriginの `/mcp` に揃える。
+GBrainのOAuth discoveryはbackend用clientが内部通信で使う。利用者向けのdiscovery、`/authorize`、`/token`、`/revoke` はbrainhubが提供する。公開先を変更するときは、`PUBLIC_MCP_URL` を公開originの `/mcp` に揃える。
 
 脳の作成と参照:
 
@@ -221,17 +224,23 @@ POST /api/brains/{sourceID}/writer/reissue ownerのみ。Web書き込み用clien
 POST /api/brains/{sourceID}/invitations  ownerのみ。招待tokenは作成時だけ返す
 GET  /api/brains/{sourceID}/invitations  ownerのみ。生tokenは返さない
 POST /api/invitations/{token}/accept     招待を受諾してMembershipを作る
-POST /api/brains/{sourceID}/clients      Claude向けpublic OAuth clientを発行
-GET  /api/brains/{sourceID}/clients      自分の発行済みclient一覧
-DELETE /api/clients/{id}                 自分のclientを失効
+POST /api/brains/{sourceID}/clients      旧GBrain client発行API（新接続では不使用）
+GET  /api/brains/{sourceID}/clients      旧issued client一覧
+DELETE /api/clients/{id}                 旧issued clientを失効
 DELETE /api/brains/{sourceID}/members/{userID} ownerのみ。clientも連鎖失効
+GET  /api/mcp/connection                 利用者共通の接続情報と閲覧可能な脳
+POST /api/mcp/client                     Claude Web用Client IDを1人1件発行
+POST /api/mcp/reader/reissue             orphanになったGBrain readerを手動再発行
+GET  /authorize                          brainhub OAuth認可開始
+POST /token                              認可コード交換・refresh tokenローテーション
+POST /revoke                             brainhub MCP tokenを失効
 ```
 
 `GET /api/brains` はGBrainのsource形式ではなく、`id` / `source_id` / `name` / `description` / `visibility` / `state` などBrain固有の情報を返す。GBrain側だけにあるsourceは返さない。
 
 本番では `BRAINHUB_ENV=production` を設定し、session cookie に `Secure` を付ける。
 
-Claude Webへ接続するときはMCP URLだけでなく、brainhubで発行したOAuth Client IDをコネクタ編集画面へ設定する。発行するclientはpublic clientなのでsecretはない。
+Claude Webへ接続するときはMCP URLだけでなく、brainhubで発行したOAuth Client IDをコネクタ編集画面へ設定する。発行するclientはpublic clientなのでsecretはない。旧 `issued_clients` の行とGBrain clientは移行履歴として残すが、brainhubの `/mcp` はそのtokenを受け付けず、GBrain OAuthへフォールバックしない。
 
 Web編集用には、脳の作成・adopt時にsourceへ固定したconfidential writer clientを1本だけ発行する。secretは `BRAINHUB_WRITER_CREDENTIAL_KEY` によるAES-GCM暗号文として `brain_writer_clients` に保存し、平文をDBへ置かない。利用者へ配るpublic clientを記録する `issued_clients` は流用しない。後者はUser/Membershipに従って失効する鍵でsecretを保持しない一方、writerはbrainhub自身が脳ごとに恒久保持する別ライフサイクルだからである。
 

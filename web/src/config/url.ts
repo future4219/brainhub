@@ -10,6 +10,7 @@ export const appUrl = {
   newPage: "/brains/:sourceID/page-editor/new",
   editPage: "/brains/:sourceID/page-editor/edit/*",
   invitation: "/invite/:token",
+  oauthAuthorize: "/oauth/authorize",
 } as const;
 
 export function brainUrl(sourceID: string, tab: BrainTab = "pages"): string {

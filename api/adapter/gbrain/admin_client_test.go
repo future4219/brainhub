@@ -62,6 +62,16 @@ func TestAdminClientRegistersAndRevokesWithOneRelogin(t *testing.T) {
 				t.Errorf("revoke body = %v", body)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]bool{"revoked": true})
+		case "/admin/api/rescope-client":
+			var body struct {
+				ClientID      string   `json:"clientId"`
+				FederatedRead []string `json:"federatedRead"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body.ClientID != "public-client-id" || !reflect.DeepEqual(body.FederatedRead, []string{"brainhub", "public-brain"}) {
+				t.Errorf("rescope body = %+v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"clientId": body.ClientID, "federatedRead": body.FederatedRead})
 		default:
 			http.NotFound(w, r)
 		}
@@ -80,6 +90,9 @@ func TestAdminClientRegistersAndRevokesWithOneRelogin(t *testing.T) {
 	})
 	if err != nil || registered.ID != "public-client-id" || registered.Secret != "" {
 		t.Fatalf("RegisterClient = %+v, %v", registered, err)
+	}
+	if err := client.RescopeClient(context.Background(), registered.ID, []string{"brainhub", "public-brain"}); err != nil {
+		t.Fatal(err)
 	}
 	if err := client.RevokeClient(context.Background(), registered.ID); err != nil {
 		t.Fatal(err)

@@ -1,12 +1,8 @@
 import type { BrainTab } from "@/config/url";
-import type {
-  Invitation,
-  IssuedClient,
-  Role,
-} from "@/entities/access/entity";
+import type { Invitation, Role } from "@/entities/access/entity";
 import type { Brain, Page, PublicConfig } from "@/entities/brain/entity";
+import type { MCPConnection } from "@/entities/mcp/entity";
 import type { ViewerState } from "@/entities/user/entity";
-import type { ConnectClient } from "@/lib/format";
 
 export type PageSort = "updated" | "slug";
 export type CopyState = Record<string, "copied" | "failed">;
@@ -38,20 +34,19 @@ export type ConnectSectionProps = {
   viewer: ViewerState["viewer"];
   brain: Brain | null;
   pageCount?: number;
-  client: ConnectClient;
   config: PublicConfig | null;
-  clients: IssuedClient[] | null;
-  authorized: boolean | null;
+  connection: MCPConnection | null;
   error: string;
   submitting: boolean;
+  readerReissuing: boolean;
+  readerStatus: string;
   writerReissuing: boolean;
   writerStatus: string;
   canReissueWriter: boolean;
   copyState: CopyState;
-  onClientChange: (client: ConnectClient) => void;
   onCopy: (key: string, value: string) => void;
   onIssue: () => void;
-  onRevoke: (id: string) => void;
+  onReissueReader: () => void;
   onReissueWriter: () => void;
 };
 

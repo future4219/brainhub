@@ -54,6 +54,12 @@ func main() {
 	if err := writerService.Backfill(context.Background()); err != nil {
 		log.Printf("brain writer backfill incomplete: %v", err)
 	}
+	readerService, err := gbrain.NewReaderService(
+		configuration.GBrainBaseURL, adminClient, repositories, clock, ids, configuration.WriterCredentialKey,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 	shimClient, err := gbrain.NewShimClient(configuration.ShimURL, configuration.ShimToken)
 	if err != nil {
 		log.Fatal(err)
@@ -88,10 +94,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, readerService, clock, ids, configuration.PublicMCPURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := mcpUseCase.ReconcileReaders(context.Background()); err != nil {
+		log.Printf("brain reader reconciliation incomplete: %v", err)
+	}
+	httpHandler, err := router.New(
+		brainUseCase, pageUseCase, authUseCase, accessUseCase, mcpUseCase,
+		configuration.PublicMCPURL, configuration.PublicWebURL, proxy, configuration.Production,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           router.New(brainUseCase, pageUseCase, authUseCase, accessUseCase, configuration.PublicMCPURL, configuration.PublicWebURL, proxy, configuration.Production),
+		Handler:           httpHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

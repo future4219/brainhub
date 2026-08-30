@@ -19,6 +19,7 @@ brainhub の状態は **2つのシステムに分散する**。
 - Brain 行はあるが GBrain に source が無い → 誰も書けない幽霊の脳
 - GBrain にクライアントが存在するが `issued_clients` に記録が無い → **所有者不明の有効な鍵**
 - Membership を消したが GBrain のクライアントを失効し忘れた → **退職者が読み続けられる**
+- readerのrescopeに失敗したのに古い広いgrantで転送する → **Membershipを外した脳を読み続けられる**
 
 これらを型と状態で防ぐ。
 
@@ -259,6 +260,19 @@ Web編集用のsource固定confidential client。利用者へ渡す `IssuedClien
 
 鍵のローテーションは未実装で、v1は `key_version` を持たない。後からnullable列を追加でき、現時点の復旧手段はownerが旧clientを失効して再発行することである。
 
+### MCPClient / MCPToken / ReaderClient
+
+利用者がAIクライアントへ設定する接続は、脳ごとではなく利用者ごとに1本持つ。
+
+- `MCPClient` はbrainhub OAuthのpublic client。Claude Webの完全一致redirect URIだけを持ち、secretは持たない。
+- authorization code、access token、refresh tokenは生値をDBへ保存せずSHA-256 hashだけを保存する。
+- access tokenは1時間、refresh tokenは30日。refreshの使用時は必ず新しいaccess/refresh pairへローテーションする。
+- `ReaderClient` はbrainhubがGBrainへ接続する利用者別confidential client。secretはwriterと同じAES-GCMで暗号化する。
+- readerの `federated_read` はMCPリクエストごとに現在見られるsourceと照合する。差分があればGBrainの `rescope-client` 後にaccess tokenも取り直す。
+- rescopeまたはその永続化に失敗したら `orphan` にし、古いgrantでは一切転送しない。復旧は接続画面の手動再発行だけで行う。
+
+`issued_clients` は旧GBrain OAuth clientの履歴であり、新しいbrainhub OAuth client/tokenと混同しない。既存行とGBrain側の鍵は削除しないが、`/mcp` の認証には使わない。
+
 ### Page
 
 ```go
@@ -361,11 +375,12 @@ usecase で守る。ドメインのコメントに書き残す。
 
 1. Brain の `SourceID` は作成後に変更されない。
 2. `Visibility` が `public` へ変わるのは明示的な操作のみ。既定は `private`。
-3. Membership を revoke したら、その User の当該 Brain 向け IssuedClient をすべて revoke する。
-4. User が `suspended` になったら、その User の IssuedClient をすべて revoke する。
+3. Membership を revoke したら、その User の当該 Brain 向け旧IssuedClientをrevokeし、次のMCP呼び出しではreaderの範囲から即時に外す。
+4. User が `suspended` になったら、その User の旧IssuedClientをすべてrevokeし、brainhub MCP tokenも照合時に拒否する。
 5. `ready` でない Brain は公開ページに出さない。
 6. 利用者へ渡す IssuedClient の secret はどの層にも保存しない。brainhub自身のsource固定writerだけは、専用鍵で暗号化して `brain_writer_clients` に保存する。
-7. 権限判定は Membership のみを根拠とする。Invitation は根拠にしない。
+7. private Brainの権限判定はMembershipだけを根拠とする。Invitationは根拠にしない。`public + ready` はMembershipなしでも読み取れる。
+8. readerのrescopeに失敗した場合は、古い広いGBrain tokenで続行せず必ず失敗させる。
 
 3 と 4 を守らないと、退職者が読み続けられる。
 

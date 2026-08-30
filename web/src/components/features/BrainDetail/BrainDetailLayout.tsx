@@ -16,7 +16,6 @@ type BrainDetailLayoutProps = {
   shell: ViewerState;
   detail: BrainDetailState;
   pageCount?: number;
-  clientCount?: number;
   inviteCount?: number;
   search?: {
     value: string;
@@ -30,7 +29,6 @@ export function BrainDetailLayout({
   shell,
   detail,
   pageCount,
-  clientCount,
   inviteCount,
   search,
   children,
@@ -74,7 +72,6 @@ export function BrainDetailLayout({
               sourceID={detail.sourceID}
               tab={detail.tab}
               pageCount={pageCount}
-              clientCount={clientCount}
               inviteCount={inviteCount}
             />
             {detail.brain.state !== "ready" ? (
@@ -148,13 +145,11 @@ function BrainTabs({
   sourceID,
   tab,
   pageCount,
-  clientCount,
   inviteCount,
 }: {
   sourceID: string;
   tab: BrainTab;
   pageCount?: number;
-  clientCount?: number;
   inviteCount?: number;
 }) {
   return (
@@ -175,11 +170,6 @@ function BrainTabs({
           {value === "pages" && pageCount !== undefined && (
             <span className="rounded-pill bg-surface px-2 font-mono text-xs text-text-secondary">
               {pageCount}
-            </span>
-          )}
-          {value === "connect" && clientCount !== undefined && (
-            <span className="rounded-pill bg-surface px-2 font-mono text-xs text-text-secondary">
-              {clientCount}
             </span>
           )}
           {value === "invites" && inviteCount !== undefined && (

@@ -31,29 +31,33 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 | `get_links` | brainhubが作成した状態辺の取得 | 編集画面の `superseded_by` |
 | `add_link` / `remove_link` | 状態辺の同期 | ページ保存後の `superseded_by` |
 
+利用者向け `/mcp` はbrainhubがBearer tokenからUserを特定し、現在見られるsourceへrescopeした利用者別GBrain reader tokenに差し替える。`query` / `list_pages` / `get_page` は明示された `source_id` が範囲内かbrainhubで先に確認し、未指定時は `__all__` を注入する。sourceを指定できない操作も、利用者別readerのgrantを上限として転送する。
+
 #### `search` の source 境界（2026-08-23）
 
 GBrain v0.46.28.0 の MCP `search` には `source_id` 引数がない。呼び出しごとに source を指定して絞ることはできず、検索対象は OAuth client の `federatedRead` grant で決まる。`gbrain-evals-amara-v1` の調査では、`federatedRead=["gbrain-evals-amara-v1"]` の専用 client を発行して source を限定した。
 
-brainhub が将来検索機能を公開する場合、client の source grant が唯一の GBrain 側の門になる。HTTP request の source パラメータや brainhub 内の結果フィルタだけに依存せず、対象 source だけを grant された資格情報で GBrain の `search` を呼ぶこと。
+brainhubの `/mcp` は `search` をHTTP 200のMCP tool errorとして拒否し、`query` を案内する。GBrainの `search` は `source_id` を受け取らずgrant全体を検索するため、別の結果フィルタで代替しない。
 
 ### OAuth 2.1
 
 | | 用途 |
 |---|---|
-| `/.well-known/oauth-authorization-server` | ディスカバリ |
-| `/authorize` `/token` `/revoke` | ブラウザからの接続 |
-| `client_credentials` grant | brainhub 自身の読み取り、およびsource固定writerのread/write |
-| `authorization_code` + PKCE + `token_endpoint_auth_method=none` | Claude / ChatGPT からの接続 |
-| `--public-url` が discovery に反映される | 外部到達 |
+| GBrain `client_credentials` grant | brainhub自身の内部読み取り、source固定writer、利用者別reader |
+| GBrain `--public-url` discovery | adapterがpathだけ採用し、内部originへ差し替えてbackend tokenを取得 |
+| brainhub `/.well-known/*` / `/authorize` / `/token` / `/revoke` | Claude Web向けOAuth 2.1。GBrainへ転送しない |
+| brainhub `authorization_code` + PKCE S256 | public client。認可コード5分、access 1時間、refresh 30日ローテーション |
+| Claude Web redirect URI | `https://claude.ai/api/mcp/auth_callback` の完全一致だけを許可 |
+| `/register` | DCR未対応として拒否 |
 
 ### Admin API
 
 | 操作 | 用途 | 使用箇所 |
 |---|---|---|
 | `POST /admin/login` | bootstrap tokenを24時間のadmin cookieへ交換 | `api/adapter/gbrain/admin_client.go` |
-| `POST /admin/api/register-client` | 利用者向けpublic clientと、脳ごとのconfidential writer client発行 | client発行、Brain作成/adopt、writer再発行 |
-| `POST /admin/api/revoke-client` | 利用者clientの失効、writer再発行前の旧client失効 | `DELETE /api/clients/{id}`、`POST /api/brains/{id}/writer/reissue` |
+| `POST /admin/api/register-client` | 旧利用者向けpublic client、脳ごとのwriter、利用者別readerを発行 | 旧client発行、Brain作成/adopt、writer/reader再発行 |
+| `POST /admin/api/revoke-client` | 旧利用者client、writer、readerの失効 | 旧client削除、writer/reader再発行 |
+| `POST /admin/api/rescope-client` | 利用者別readerの `federatedRead` を現在の閲覧範囲へ変更 | `/mcp` 転送前、起動時照合 |
 
 0.45.18.0ではadmin cookieに `Secure` と `Path=/admin` が付く。brainhubはCompose内部のHTTPで通信するため、レスポンスから取得したcookieをadmin APIリクエストへ明示的に付与する。
 
@@ -71,6 +75,7 @@ brainhub が将来検索機能を公開する場合、client の source grant �
 | `mcp.publish_skills` | 繋いだ AI にスキルが配られるか |
 | `GBRAIN_SKILLS_DIR` | 未設定だと `list_skills` が空になる |
 | `autopilot.auto_drain.enabled=false` | source単位の除外機能がないv0.46.28.0で、全sourceへのatom自動生成を止める |
+| `mcp.strict_params=reject` | 未知引数を無視せず拒否し、scopeを絞ったつもりになる事故を防ぐ |
 
 ### Autopilotのマルチテナント運用方針（2026-08-23）
 
@@ -183,7 +188,7 @@ source別clientのGBrain上の名前は現在 `brainhub-writer-<source>` であ�
 5. REST作成・編集（`api/usecase/interactor/page.go`）
 6. owner用の再発行endpoint（`api/api/router/router.go`、`api/usecase/interactor/brain.go`）
 
-AIクライアントの `/mcp` 経路は別である。`api/api/router/router.go` から `api/adapter/gbrain/proxy.go` のreverse proxyへ渡し、クライアント自身のBearer tokenを差し替えずGBrainへ透過する。認可はclient発行時のmembership確認と、membership削除時の該当client失効で担保する。REST用source clientをAIクライアントの代わりに使ってはならない。
+AIクライアントの `/mcp` 経路は別である。brainhub OAuth tokenを毎回hash照合し、Membershipと `public + ready` から現在のsource一覧を作り、利用者別readerをGBrainでrescopeしてからBearer tokenを差し替える。rescope失敗時は古い広いgrantへフォールバックせず503で失敗させる。旧 `issued_clients` のGBrain tokenとbrainhub tokenは `/mcp` で相互に代用できない。REST用source clientをAIクライアントの代わりに使ってはならない。
 
 ---
 

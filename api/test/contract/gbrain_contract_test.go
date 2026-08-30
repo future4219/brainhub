@@ -44,6 +44,11 @@ func TestGBrainAdminClientLifecycle(t *testing.T) {
 			t.Errorf("cleanup GBrain client: %v", err)
 		}
 	})
+	// Admin API contract: per-user readers must be rescopable before /mcp
+	// forwards any source-less GBrain operation.
+	if err := client.RescopeClient(ctx, registered.ID, []string{source}); err != nil {
+		t.Fatal(err)
+	}
 	if err := client.RevokeClient(ctx, registered.ID); err != nil {
 		t.Fatal(err)
 	}

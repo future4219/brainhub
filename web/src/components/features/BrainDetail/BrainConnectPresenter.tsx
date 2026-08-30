@@ -22,9 +22,6 @@ export function BrainConnectPresenter({
       shell={shell}
       detail={detail}
       pageCount={connection.pageCount}
-      clientCount={
-        connection.clients?.filter((client) => client.state === "active").length
-      }
     >
       <ConnectSection {...connection} />
     </BrainDetailLayout>

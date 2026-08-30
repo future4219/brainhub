@@ -21,3 +21,8 @@ type GBrainAdmin interface {
 	RegisterClient(context.Context, RegisterGBrainClientInput) (RegisteredGBrainClient, error)
 	RevokeClient(context.Context, string) error
 }
+
+type GBrainReaderAdmin interface {
+	GBrainAdmin
+	RescopeClient(context.Context, string, []string) error
+}

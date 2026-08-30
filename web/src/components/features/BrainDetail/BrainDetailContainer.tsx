@@ -8,17 +8,14 @@ import type { BrainDetailState, PageSort } from "@/components/features/BrainDeta
 import { brainTab, invitationUrl } from "@/config/url";
 import type {
   Invitation,
-  IssuedClient,
   Role,
 } from "@/entities/access/entity";
 import type { Brain, Page, PublicConfig } from "@/entities/brain/entity";
+import type { MCPConnection } from "@/entities/mcp/entity";
 import { useViewer } from "@/hooks/useViewer";
 import {
   createInvitation,
-  issueClient,
-  listClients,
   listInvitations,
-  revokeClient,
   revokeInvitation,
 } from "@/lib/accessApi";
 import { APIError } from "@/lib/api";
@@ -29,7 +26,11 @@ import {
   listPageTypes,
   reissueWriter,
 } from "@/lib/brainApi";
-import type { ConnectClient } from "@/lib/format";
+import {
+  getMCPConnection,
+  issueMCPClient,
+  reissueMCPReader,
+} from "@/lib/mcpApi";
 
 export function BrainDetailContainer() {
   const location = useLocation();
@@ -44,8 +45,7 @@ export function BrainDetailContainer() {
   const [pagesError, setPagesError] = useState("");
   const [canWrite, setCanWrite] = useState(false);
   const [config, setConfig] = useState<PublicConfig | null>(null);
-  const [clients, setClients] = useState<IssuedClient[] | null>(null);
-  const [clientAuthorized, setClientAuthorized] = useState<boolean | null>(null);
+  const [connection, setConnection] = useState<MCPConnection | null>(null);
   const [connectError, setConnectError] = useState("");
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [inviteAuthorized, setInviteAuthorized] = useState<boolean | null>(null);
@@ -54,14 +54,14 @@ export function BrainDetailContainer() {
   const [submitting, setSubmitting] = useState(false);
   const [writerReissuing, setWriterReissuing] = useState(false);
   const [writerStatus, setWriterStatus] = useState("");
+  const [readerReissuing, setReaderReissuing] = useState(false);
+  const [readerStatus, setReaderStatus] = useState("");
   const [copyState, setCopyState] = useState<
     Record<string, "copied" | "failed">
   >({});
   const [selectedType, setSelectedType] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PageSort>("updated");
-  const [connectClient, setConnectClient] =
-    useState<ConnectClient>("claude");
 
   useEffect(() => {
     document.title = `${sourceID} — brainhub`;
@@ -112,26 +112,17 @@ export function BrainDetailContainer() {
       );
     if (shell.viewer === undefined) return;
     if (shell.viewer === null) {
-      setClients([]);
-      setClientAuthorized(false);
+      setConnection(null);
       return;
     }
-    setClients(null);
-    void listClients(sourceID)
-      .then((loaded) => {
-        setClients(loaded);
-        setClientAuthorized(true);
-      })
-      .catch((cause) => {
-        if (cause instanceof APIError && cause.status === 403) {
-          setClients([]);
-          setClientAuthorized(false);
-        } else {
-          setConnectError(
-            "発行済みクライアントを取得できません。接続を確認して再読み込みしてください。",
-          );
-        }
-      });
+    setConnection(null);
+    void getMCPConnection()
+      .then(setConnection)
+      .catch(() =>
+        setConnectError(
+          "接続情報を取得できません。接続を確認して再読み込みしてください。",
+        ),
+      );
   }, [brain?.state, shell.viewer, sourceID, tab]);
 
   useEffect(() => {
@@ -204,17 +195,16 @@ export function BrainDetailContainer() {
     }
   }
 
-  async function refreshClients() {
-    setClients(await listClients(sourceID));
-    setClientAuthorized(true);
+  async function refreshConnection() {
+    setConnection(await getMCPConnection());
   }
 
   async function createClient() {
     setSubmitting(true);
     setConnectError("");
     try {
-      await issueClient(sourceID);
-      await refreshClients();
+      await issueMCPClient();
+      await refreshConnection();
     } catch {
       setConnectError(
         "Claude用Client IDを発行できません。状態を確認してもう一度お試しください。",
@@ -224,14 +214,19 @@ export function BrainDetailContainer() {
     }
   }
 
-  async function removeClient(id: string) {
+  async function reissueReader() {
+    setReaderReissuing(true);
+    setReaderStatus("");
     try {
-      await revokeClient(id);
-      await refreshClients();
+      await reissueMCPReader();
+      await refreshConnection();
+      setReaderStatus("読み取り接続を再発行しました。Claudeからもう一度呼び出してください。");
     } catch {
-      setConnectError(
-        "クライアントを失効できません。状態を確認してもう一度お試しください。",
+      setReaderStatus(
+        "読み取り接続を再発行できません。表示された理由を確認して、もう一度実行してください。",
       );
+    } finally {
+      setReaderReissuing(false);
     }
   }
 
@@ -335,12 +330,12 @@ export function BrainDetailContainer() {
           viewer: shell.viewer,
           brain,
           pageCount: pages?.length,
-          client: connectClient,
           config,
-          clients,
-          authorized: clientAuthorized,
+          connection,
           error: connectError,
           submitting,
+          readerReissuing,
+          readerStatus,
           writerReissuing,
           writerStatus,
           canReissueWriter:
@@ -348,10 +343,9 @@ export function BrainDetailContainer() {
             shell.viewer !== undefined &&
             shell.viewer.id === brain?.owner_id,
           copyState,
-          onClientChange: setConnectClient,
           onCopy: copy,
           onIssue: createClient,
-          onRevoke: removeClient,
+          onReissueReader: reissueReader,
           onReissueWriter: reissueBrainWriter,
         }}
       />

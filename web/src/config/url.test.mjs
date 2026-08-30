@@ -53,5 +53,5 @@ assert.equal(safeNextPath("?next=%2Finvite%2Fabc", "/"), "/invite/abc");
 assert.equal(safeNextPath("?next=https%3A%2F%2Fevil.test", "/"), "/");
 assert.equal(pageSignature(["idea", "decision", "idea", "note", "research"]), "idea 2 · decision 1 · note 1 · +1");
 assert.equal(formatDate("2026-08-14T15:23:56.326Z"), "2026-08-14");
-assert.equal(connectionSteps("claude", "https://example.test/mcp", "client-id", "brainhub").length, 5);
-assert.match(connectionSteps("codex", "https://example.test/mcp", null, "brainhub")[0].code, /https:\/\/example\.test\/mcp/);
+assert.equal(connectionSteps("https://example.test/mcp", "client-id").length, 5);
+assert.match(connectionSteps("https://example.test/mcp", null)[1].code, /https:\/\/example\.test\/mcp/);

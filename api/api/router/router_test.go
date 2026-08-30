@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,6 +145,47 @@ type accessUseCase struct {
 	archived entity.SourceID
 }
 
+type mcpUseCase struct{}
+
+func (u *mcpUseCase) Connection(context.Context, string) (input_port.MCPConnection, error) {
+	return input_port.MCPConnection{}, nil
+}
+
+func (u *mcpUseCase) IssueClient(_ context.Context, userID string) (entity.MCPClient, error) {
+	return entity.MCPClient{ID: "mcp-client", UserID: userID, Name: "claude-web"}, nil
+}
+
+func (u *mcpUseCase) ValidateAuthorization(_ context.Context, input input_port.OAuthAuthorizationRequest, userID string) (input_port.OAuthAuthorization, error) {
+	if input.ClientID != "mcp-client" {
+		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidClient
+	}
+	return input_port.OAuthAuthorization{Client: entity.MCPClient{ID: "mcp-client", UserID: userID, Name: "claude-web"}, Input: input}, nil
+}
+
+func (u *mcpUseCase) ApproveAuthorization(context.Context, input_port.OAuthAuthorizationRequest, string) (string, error) {
+	return "authorization-code", nil
+}
+
+func (u *mcpUseCase) ExchangeAuthorizationCode(context.Context, string, string, string, string) (input_port.OAuthTokenPair, error) {
+	return input_port.OAuthTokenPair{AccessToken: "access-token", RefreshToken: "refresh-token", ExpiresIn: time.Hour}, nil
+}
+
+func (u *mcpUseCase) RefreshAccessToken(context.Context, string, string) (input_port.OAuthTokenPair, error) {
+	return input_port.OAuthTokenPair{AccessToken: "access-token", RefreshToken: "refresh-token", ExpiresIn: time.Hour}, nil
+}
+
+func (u *mcpUseCase) RevokeToken(context.Context, string, string) error { return nil }
+
+func (u *mcpUseCase) AuthorizeCall(_ context.Context, token, _ string, _ *string) (input_port.MCPCallAuthorization, error) {
+	if token != "access-token" {
+		return input_port.MCPCallAuthorization{}, input_port.ErrMCPUnauthorized
+	}
+	return input_port.MCPCallAuthorization{GBrainToken: "gbrain-token"}, nil
+}
+
+func (u *mcpUseCase) ReissueReader(context.Context, string) error { return nil }
+func (u *mcpUseCase) ReconcileReaders(context.Context) error      { return nil }
+
 func (u *accessUseCase) CreateInvitation(_ context.Context, _ entity.SourceID, actorID string, input input_port.CreateInvitationInput) (entity.Invitation, string, error) {
 	return entity.Invitation{ID: "invitation-id", BrainID: "brain-id", Email: nil, Role: input.Role, InvitedBy: actorID, State: entity.InvitationStatePending, ExpiresAt: input.ExpiresAt, CreatedAt: u.now}, "raw-invitation-token", nil
 }
@@ -246,7 +288,12 @@ func TestRoutes(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}}
 	access := &accessUseCase{now: now}
-	server := httptest.NewServer(router.New(brains, pages, auth, access, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, false))
+	mcp := &mcpUseCase{}
+	routes, err := router.New(brains, pages, auth, access, mcp, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(routes)
 	defer server.Close()
 
 	t.Run("healthz", func(t *testing.T) {
@@ -656,7 +703,11 @@ func TestRoutes(t *testing.T) {
 
 	t.Run("production cookie is secure", func(t *testing.T) {
 		productionAuth := &authUseCase{user: auth.user}
-		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, access, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, true))
+		productionRoutes, err := router.New(brains, pages, productionAuth, access, mcp, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		productionServer := httptest.NewServer(productionRoutes)
 		defer productionServer.Close()
 		response, err := http.Post(productionServer.URL+"/api/auth/register", "application/json", bytes.NewBufferString(`{"email":"alice@example.com","password":"correct-password","name":"Alice"}`))
 		if err != nil {
@@ -668,32 +719,50 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
-	for _, path := range []string{
-		"/mcp",
-		"/mcp/tools",
-		"/.well-known/oauth-authorization-server",
-		"/token",
-		"/revoke",
-		"/register",
-	} {
-		t.Run("proxy "+path, func(t *testing.T) {
-			request, _ := http.NewRequest(http.MethodDelete, server.URL+path, nil)
-			response, err := http.DefaultClient.Do(request)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer response.Body.Close()
-			if response.StatusCode != http.StatusNoContent || response.Header.Get("X-Proxied-Path") != path {
-				t.Fatalf("proxy status/path = %d %q", response.StatusCode, response.Header.Get("X-Proxied-Path"))
-			}
-		})
-	}
+	t.Run("mcp requires brainhub token and replaces it upstream", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodDelete, server.URL+"/mcp", nil)
+		request.Header.Set("Authorization", "Bearer access-token")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent || response.Header.Get("X-Proxied-Path") != "/mcp" {
+			t.Fatalf("proxy status/path = %d %q", response.StatusCode, response.Header.Get("X-Proxied-Path"))
+		}
+	})
+
+	t.Run("oauth metadata is served by brainhub", func(t *testing.T) {
+		response, err := http.Get(server.URL + "/.well-known/oauth-authorization-server")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var metadata map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&metadata); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusOK || metadata["token_endpoint"] != "https://mcp.example.com/token" {
+			t.Fatalf("metadata = %d %v", response.StatusCode, metadata)
+		}
+	})
+
+	t.Run("dynamic registration is rejected", func(t *testing.T) {
+		response, err := http.Post(server.URL+"/register", "application/json", bytes.NewBufferString(`{}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusBadRequest {
+			t.Fatalf("register status = %d; want 400", response.StatusCode)
+		}
+	})
 
 	t.Run("proxy authorize without following redirect", func(t *testing.T) {
 		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		}}
-		response, err := client.Get(server.URL + "/authorize?response_type=code&client_id=test-client")
+		response, err := client.Get(server.URL + "/authorize?response_type=code&client_id=mcp-client&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback&code_challenge=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ&code_challenge_method=S256&resource=https%3A%2F%2Fmcp.example.com%2Fmcp")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -701,14 +770,8 @@ func TestRoutes(t *testing.T) {
 		if response.StatusCode != http.StatusFound {
 			t.Fatalf("status = %d; want 302", response.StatusCode)
 		}
-		if got := response.Header.Get("Location"); got != "/admin/consent?request=test" {
+		if got := response.Header.Get("Location"); !strings.HasPrefix(got, "https://brainhub.example.com/login?next=") {
 			t.Fatalf("Location = %q", got)
-		}
-		if got := response.Header.Get("X-Proxied-Path"); got != "/authorize" {
-			t.Fatalf("proxied path = %q", got)
-		}
-		if got := response.Header.Get("X-Proxied-Query"); got != "response_type=code&client_id=test-client" {
-			t.Fatalf("proxied query = %q", got)
 		}
 	})
 

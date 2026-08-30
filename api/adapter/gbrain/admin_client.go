@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -84,6 +85,25 @@ func (c *AdminClient) RevokeClient(ctx context.Context, clientID string) error {
 	}
 	if !response.Revoked {
 		return errors.New("GBrain revoke-client did not confirm revocation")
+	}
+	return nil
+}
+
+func (c *AdminClient) RescopeClient(ctx context.Context, clientID string, federatedRead []string) error {
+	if clientID == "" || len(federatedRead) == 0 {
+		return errors.New("GBrain rescope requires a client ID and at least one source")
+	}
+	var response struct {
+		ClientID      string   `json:"clientId"`
+		FederatedRead []string `json:"federatedRead"`
+	}
+	if err := c.doJSON(ctx, "/admin/api/rescope-client", map[string]any{
+		"clientId": clientID, "federatedRead": federatedRead,
+	}, &response); err != nil {
+		return err
+	}
+	if response.ClientID != clientID || !slices.Equal(response.FederatedRead, federatedRead) {
+		return errors.New("GBrain rescope-client did not confirm the requested scope")
 	}
 	return nil
 }

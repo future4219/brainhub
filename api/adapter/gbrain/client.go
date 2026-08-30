@@ -295,6 +295,19 @@ func (c *Client) callMCP(ctx context.Context, payload []byte) (*rpcResponse, err
 	return nil, errors.New("GBrain authentication failed after token refresh")
 }
 
+// BearerToken is used only by brainhub's authenticated MCP proxy. The caller
+// must establish the user's current source ceiling before asking for a token.
+func (c *Client) BearerToken(ctx context.Context) (string, error) {
+	return c.token(ctx)
+}
+
+func (c *Client) clearBearerToken() {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+	c.accessToken = ""
+	c.tokenExpiry = time.Time{}
+}
+
 func (c *Client) token(ctx context.Context) (string, error) {
 	c.tokenMu.Lock()
 	defer c.tokenMu.Unlock()

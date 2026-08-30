@@ -82,11 +82,10 @@ func (s *Store) FindAuthIdentity(ctx context.Context, provider entconst.AuthProv
 }
 
 func (s *Store) Create(ctx context.Context, userID string, expiresAt time.Time) (entity.Session, string, error) {
-	tokenBytes := make([]byte, 32)
-	if _, err := io.ReadFull(s.random, tokenBytes); err != nil {
+	rawToken, err := randomToken(s.random)
+	if err != nil {
 		return entity.Session{}, "", err
 	}
-	rawToken := base64.RawURLEncoding.EncodeToString(tokenBytes)
 	tokenHash := hashToken(rawToken)
 	session := entity.Session{
 		ID:        s.ids.New(),
@@ -94,7 +93,7 @@ func (s *Store) Create(ctx context.Context, userID string, expiresAt time.Time) 
 		ExpiresAt: expiresAt,
 		CreatedAt: s.clock.Now(),
 	}
-	_, err := s.queries.Exec(ctx, `
+	_, err = s.queries.Exec(ctx, `
 		INSERT INTO sessions (id, token_hash, user_id, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5)`,
 		session.ID, tokenHash, session.UserID, session.ExpiresAt, session.CreatedAt,
@@ -156,6 +155,14 @@ func (s *Store) WithinTransaction(ctx context.Context, fn func(output_port.AuthR
 func hashToken(rawToken string) string {
 	sum := sha256.Sum256([]byte(rawToken))
 	return hex.EncodeToString(sum[:])
+}
+
+func randomToken(reader io.Reader) (string, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := io.ReadFull(reader, tokenBytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(tokenBytes), nil
 }
 
 func mapError(err error) error {
