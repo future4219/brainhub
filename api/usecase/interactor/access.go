@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"brainhub/domain/entconst"
 	"brainhub/domain/entity"
 	"brainhub/domain/validation"
 	"brainhub/usecase/input_port"
@@ -343,6 +344,9 @@ func (u *accessUseCase) ArchiveBrain(ctx context.Context, sourceID entity.Source
 		return err
 	}
 	if err := u.transactions.WithinAccessTransaction(ctx, func(repositories output_port.AccessRepositories) error {
+		if brain.State == entconst.BrainStateFailed {
+			return repositories.DeleteFailedBrain(ctx, brain.ID)
+		}
 		if err := repositories.RevokePendingInvitationsByBrain(ctx, brain.ID); err != nil {
 			return err
 		}

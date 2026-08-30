@@ -59,6 +59,32 @@ func (s *accessStore) ArchiveBrain(_ context.Context, id string, now time.Time) 
 	return output_port.ErrConflict
 }
 
+func (s *accessStore) DeleteFailedBrain(_ context.Context, id string) error {
+	for sourceID, brain := range s.brains {
+		if brain.ID != id || brain.State != entconst.BrainStateFailed || brain.ArchivedAt != nil {
+			continue
+		}
+		delete(s.brains, sourceID)
+		for key, membership := range s.memberships {
+			if membership.BrainID == id {
+				delete(s.memberships, key)
+			}
+		}
+		for key, invitation := range s.invitations {
+			if invitation.BrainID == id {
+				delete(s.invitations, key)
+			}
+		}
+		for key, client := range s.clients {
+			if client.BrainID == id {
+				delete(s.clients, key)
+			}
+		}
+		return nil
+	}
+	return output_port.ErrConflict
+}
+
 func (s *accessStore) CreateUser(_ context.Context, user entity.User) error {
 	s.users[user.ID] = user
 	return nil
@@ -397,6 +423,21 @@ func TestArchiveWaitsForClientRevocation(t *testing.T) {
 	}
 	if brain := store.brains["brainhub"]; brain.ArchivedAt != nil {
 		t.Fatalf("brain archived before clients were revoked: %+v", brain)
+	}
+}
+
+func TestFailedBrainIsDeletedForRetry(t *testing.T) {
+	store, _, useCase, _ := accessFixture(t)
+	brain := store.brains["brainhub"]
+	brain.State = entconst.BrainStateFailed
+	store.brains["brainhub"] = brain
+	store.invitations["pending"] = entity.Invitation{ID: "pending", BrainID: brain.ID, State: entity.InvitationStatePending}
+
+	if err := useCase.ArchiveBrain(context.Background(), "brainhub", "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := store.brains["brainhub"]; exists || len(store.memberships) != 0 || len(store.invitations) != 0 {
+		t.Fatalf("failed brain records remain: brain=%v memberships=%v invitations=%v", exists, store.memberships, store.invitations)
 	}
 }
 

@@ -45,6 +45,7 @@ type AccessRepositories interface {
 	AccessBrainRepository
 	InvitationRepository
 	AccessMembershipRepository
+	DeleteFailedBrain(context.Context, string) error
 }
 
 type AccessTransactionManager interface {

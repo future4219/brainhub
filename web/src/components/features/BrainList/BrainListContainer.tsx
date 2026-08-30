@@ -61,11 +61,13 @@ export function BrainListContainer() {
   }, [brains, query, visibility]);
 
   async function removeBrain(brain: Brain) {
+    const confirmation =
+      brain.state === "failed"
+        ? `「${brain.source_id}」の失敗した登録を削除します。\n削除後は同じURLで作り直せます。`
+        : `「${brain.source_id}」を削除します。\nページは一覧から見えなくなり、接続は失効します。このURLは再利用できません。`;
     if (
       deletingRef.current ||
-      !window.confirm(
-        `「${brain.source_id}」を削除します。\nページは一覧から見えなくなり、接続は失効します。このURLは再利用できません。`,
-      )
+      !window.confirm(confirmation)
     ) {
       return;
     }

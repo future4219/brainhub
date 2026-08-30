@@ -93,6 +93,7 @@ provisioning ──> ready ──> degraded ──> ready
 ```
 
 `failed` から `ready` へ直接は遷移しない。作り直して `provisioning` からやり直す。
+作成に失敗した Brain は実体が成立していないため、削除時に関連登録も物理削除して `SourceID` を再利用できるようにする。`ready` / `degraded` の削除は `archived` への論理削除で、`SourceID` は再利用しない。
 
 ### Visibility
 

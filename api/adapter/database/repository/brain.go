@@ -77,6 +77,24 @@ func (s *Store) ArchiveBrain(ctx context.Context, id string, now time.Time) erro
 	return nil
 }
 
+func (s *Store) DeleteFailedBrain(ctx context.Context, id string) error {
+	for _, table := range []string{"invitations", "issued_clients", "memberships", "brain_writer_clients"} {
+		if _, err := s.queries.Exec(ctx, `DELETE FROM `+table+` WHERE brain_id = $1 AND EXISTS (
+			SELECT 1 FROM brains WHERE id = $1 AND state = 'failed' AND archived_at IS NULL
+		)`, id); err != nil {
+			return mapError(err)
+		}
+	}
+	tag, err := s.queries.Exec(ctx, `DELETE FROM brains WHERE id = $1 AND state = 'failed' AND archived_at IS NULL`, id)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return output_port.ErrConflict
+	}
+	return nil
+}
+
 func (s *Store) TransitionBrain(ctx context.Context, id string, state entconst.BrainState, reason string, now time.Time) (entity.Brain, error) {
 	brain, err := scanBrain(s.queries.QueryRow(ctx, `
 		UPDATE brains

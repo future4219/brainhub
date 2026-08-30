@@ -112,4 +112,34 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 			t.Fatalf("archived brain remained in list: %+v", listed)
 		}
 	}
+
+	failed := entity.Brain{
+		ID: ids.New(), SourceID: entity.SourceID("failed-retry-" + strings.ToLower(ids.New()[20:])), Name: "Failed Retry",
+		Visibility: entconst.VisibilityPrivate, OwnerID: user.ID, State: entconst.BrainStateFailed,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	failedMembership := entity.Membership{ID: ids.New(), BrainID: failed.ID, UserID: user.ID, Role: entity.RoleOwner, CreatedAt: now, UpdatedAt: now}
+	failedWriter := entity.BrainWriterClient{BrainID: failed.ID, WriteSourceID: failed.SourceID, State: entity.WriterClientStateIssuing}
+	if err := store.WithinBrainTransaction(ctx, func(repositories output_port.BrainRepositories) error {
+		if err := repositories.CreateBrain(ctx, failed); err != nil {
+			return err
+		}
+		if err := repositories.CreateMembership(ctx, failedMembership); err != nil {
+			return err
+		}
+		return repositories.CreateBrainWriterClient(ctx, failedWriter)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WithinAccessTransaction(ctx, func(repositories output_port.AccessRepositories) error {
+		return repositories.DeleteFailedBrain(ctx, failed.ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	replacement := failed
+	replacement.ID, replacement.State = ids.New(), entconst.BrainStateProvisioning
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, "DELETE FROM brains WHERE id = $1", replacement.ID) })
+	if err := store.CreateBrain(ctx, replacement); err != nil {
+		t.Fatalf("reuse failed source ID: %v", err)
+	}
 }
