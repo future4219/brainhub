@@ -243,14 +243,9 @@ Web編集用には、脳の作成・adopt時にsourceへ固定したconfidential
 docker compose up -d --build brainhub web
 ```
 
-フロントをホットリロードしたい場合は、APIコンテナを起動したままViteをホストで動かす。Viteの `/api` プロキシは `http://localhost:8080` を使う。
+WebコンテナはVite開発サーバーで動き、`web/src` の変更をホットリロードする。依存関係やDockerfileを変更した場合だけ再ビルドする。
 
-```bash
-npm --prefix web ci
-npm --prefix web run dev
-```
-
-Goの変更を自動検知してコンテナを再ビルド・再起動する場合はCompose Watchを使う。常駐する開発専用サービスや追加のリローダーは使わない。
+Goの変更を自動検知してコンテナを再ビルド・再起動する場合はCompose Watchを使い、Go用の常駐リローダーは追加しない。
 
 ```bash
 docker compose watch brainhub

@@ -1,8 +1,16 @@
-FROM node:22-alpine AS build
+FROM node:22-alpine AS dependencies
 
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
+
+FROM dependencies AS dev
+
+COPY web/ ./
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+FROM dependencies AS build
+
 COPY web/ ./
 RUN npm run build
 

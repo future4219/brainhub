@@ -151,13 +151,20 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+      target: dev
     depends_on:
       brainhub:
         condition: service_healthy
+    environment:
+      VITE_API_PROXY_TARGET: http://brainhub:8080
+    volumes:
+      - ./web/src:/src/src
+      - ./web/index.html:/src/index.html
+      - ./web/vite.config.ts:/src/vite.config.ts
     ports:
-      - "127.0.0.1:3000:80"
+      - "127.0.0.1:3000:5173"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:5173/"]
       interval: 5s
       timeout: 3s
       retries: 12
