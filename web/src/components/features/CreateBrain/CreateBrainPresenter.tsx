@@ -173,8 +173,12 @@ export function CreateBrainPresenter({
                     )}
                   </Feedback>
                 )}
-                <Button className="mt-6" type="submit" disabled={submitting}>
-                  {submitting ? "作成中…" : "脳を作る"}
+                <Button
+                  className="mt-6 w-full text-[var(--bh-color-canvas)]"
+                  type="submit"
+                  disabled={submitting}
+                >
+                  <span>{submitting ? "作成中…" : "脳を作る"}</span>
                 </Button>
               </form>
             )}
