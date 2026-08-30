@@ -30,7 +30,7 @@ func (s *Store) CreateBrain(ctx context.Context, brain entity.Brain) error {
 }
 
 func (s *Store) ListBrains(ctx context.Context) ([]entity.Brain, error) {
-	rows, err := s.queries.Query(ctx, `SELECT `+brainColumns+` FROM brains ORDER BY created_at, id`)
+	rows, err := s.queries.Query(ctx, `SELECT `+brainColumns+` FROM brains WHERE archived_at IS NULL ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (s *Store) ListBrains(ctx context.Context) ([]entity.Brain, error) {
 }
 
 func (s *Store) FindBrainBySourceID(ctx context.Context, sourceID entity.SourceID) (entity.Brain, error) {
-	brain, err := scanBrain(s.queries.QueryRow(ctx, `SELECT `+brainColumns+` FROM brains WHERE source_id = $1`, sourceID.String()))
+	brain, err := scanBrain(s.queries.QueryRow(ctx, `SELECT `+brainColumns+` FROM brains WHERE source_id = $1 AND archived_at IS NULL`, sourceID.String()))
 	if err != nil {
 		return entity.Brain{}, mapError(err)
 	}
@@ -56,11 +56,25 @@ func (s *Store) FindBrainBySourceID(ctx context.Context, sourceID entity.SourceI
 }
 
 func (s *Store) FindBrainByID(ctx context.Context, id string) (entity.Brain, error) {
-	brain, err := scanBrain(s.queries.QueryRow(ctx, `SELECT `+brainColumns+` FROM brains WHERE id = $1`, id))
+	brain, err := scanBrain(s.queries.QueryRow(ctx, `SELECT `+brainColumns+` FROM brains WHERE id = $1 AND archived_at IS NULL`, id))
 	if err != nil {
 		return entity.Brain{}, mapError(err)
 	}
 	return brain, nil
+}
+
+func (s *Store) ArchiveBrain(ctx context.Context, id string, now time.Time) error {
+	tag, err := s.queries.Exec(ctx, `
+		UPDATE brains
+		SET state = 'archived', state_reason = '', updated_at = $1, archived_at = $1
+		WHERE id = $2 AND archived_at IS NULL`, now, id)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return output_port.ErrConflict
+	}
+	return nil
 }
 
 func (s *Store) TransitionBrain(ctx context.Context, id string, state entconst.BrainState, reason string, now time.Time) (entity.Brain, error) {

@@ -101,6 +101,11 @@ func (s *Store) RevokeInvitation(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Store) RevokePendingInvitationsByBrain(ctx context.Context, brainID string) error {
+	_, err := s.queries.Exec(ctx, `UPDATE invitations SET state = 'revoked' WHERE brain_id = $1 AND state = 'pending'`, brainID)
+	return mapError(err)
+}
+
 func (s *Store) FindMembership(ctx context.Context, brainID, userID string) (entity.Membership, error) {
 	return s.findMembership(ctx, brainID, userID, false)
 }
@@ -177,6 +182,10 @@ func (s *Store) ListIssuedClientsByUserBrain(ctx context.Context, userID, brainI
 
 func (s *Store) ListRevocableIssuedClientsByUserBrain(ctx context.Context, userID, brainID string) ([]entity.IssuedClient, error) {
 	return s.listIssuedClients(ctx, `user_id = $1 AND brain_id = $2 AND gbrain_client_id IS NOT NULL AND state IN ('active', 'orphan')`, userID, brainID)
+}
+
+func (s *Store) ListRevocableIssuedClientsByBrain(ctx context.Context, brainID string) ([]entity.IssuedClient, error) {
+	return s.listIssuedClients(ctx, `brain_id = $1 AND gbrain_client_id IS NOT NULL AND state IN ('active', 'orphan')`, brainID)
 }
 
 func (s *Store) listIssuedClients(ctx context.Context, where string, args ...any) ([]entity.IssuedClient, error) {

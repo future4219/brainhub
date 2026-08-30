@@ -48,4 +48,5 @@ type AccessUseCase interface {
 	ListClients(context.Context, entity.SourceID, string) ([]entity.IssuedClient, error)
 	RevokeClient(context.Context, string, string) (entity.IssuedClient, error)
 	RevokeMembership(context.Context, entity.SourceID, string, string) error
+	ArchiveBrain(context.Context, entity.SourceID, string) error
 }

@@ -5,6 +5,7 @@ import type {
   Visibility,
 } from "@/components/features/BrainList/types";
 import { AppShell } from "@/components/ui/AppShell";
+import { Button } from "@/components/ui/Button";
 import { Feedback } from "@/components/ui/Feedback";
 import { Panel } from "@/components/ui/Panel";
 import { StateBadge } from "@/components/ui/StateBadge";
@@ -20,8 +21,11 @@ type BrainListPresenterProps = ViewerState & {
   metrics: Record<string, BrainMetrics>;
   query: string;
   error: boolean;
+  deletingSourceID: string;
+  deleteError: string;
   onVisibility: (visibility: Visibility) => void;
   onQuery: (query: string) => void;
+  onDelete: (brain: Brain) => void;
 };
 
 export function BrainListPresenter({
@@ -31,8 +35,11 @@ export function BrainListPresenter({
   metrics,
   query,
   error,
+  deletingSourceID,
+  deleteError,
   onVisibility,
   onQuery,
+  onDelete,
   ...shell
 }: BrainListPresenterProps) {
   return (
@@ -110,11 +117,20 @@ export function BrainListPresenter({
                 <span className="text-right">pages</span>
                 <span>updated</span>
                 <span>state</span>
+                <span />
               </div>
+              {deleteError && (
+                <Feedback kind="error" className="text-left">
+                  {deleteError}
+                </Feedback>
+              )}
               {visibleBrains.map((brain) => (
                 <BrainRow
                   brain={brain}
                   metrics={metrics[brain.source_id]}
+                  canDelete={shell.viewer?.id === brain.owner_id}
+                  deleting={deletingSourceID === brain.source_id}
+                  onDelete={onDelete}
                   key={brain.id}
                 />
               ))}
@@ -129,13 +145,32 @@ export function BrainListPresenter({
 function BrainRow({
   brain,
   metrics,
+  canDelete,
+  deleting,
+  onDelete,
 }: {
   brain: Brain;
   metrics?: BrainMetrics;
+  canDelete: boolean;
+  deleting: boolean;
+  onDelete: (brain: Brain) => void;
 }) {
   const pages = metrics?.pages;
-  const content = (
-    <>
+  const className =
+    "brain-table-grid relative grid min-w-credentials items-center gap-4 border-b border-divider px-4 py-3 last:border-b-0 hover:bg-surface";
+
+  return (
+    <div
+      className={brain.state === "ready" ? className : `${className} text-text-muted`}
+      aria-disabled={brain.state === "ready" ? undefined : "true"}
+    >
+      {brain.state === "ready" && (
+        <Link
+          aria-label={`${brain.source_id} を開く`}
+          className="absolute inset-0 z-10"
+          to={brainUrl(brain.source_id)}
+        />
+      )}
       <div className="min-w-0">
         <strong className="block truncate font-mono text-body font-medium">
           {brain.source_id}
@@ -157,23 +192,48 @@ function BrainRow({
         {formatDate(brain.updated_at)}
       </time>
       <StateBadge state={brain.state} />
+      {canDelete ? (
+        <Button
+          aria-busy={deleting}
+          aria-label={`${brain.source_id} を${deleting ? "削除中" : "削除"}`}
+          className="relative z-20 w-control-sm px-0"
+          disabled={deleting}
+          size="sm"
+          title={`${brain.source_id} を削除`}
+          type="button"
+          variant="danger"
+          onClick={() => onDelete(brain)}
+        >
+          {deleting ? <span aria-hidden="true">…</span> : <TrashIcon />}
+        </Button>
+      ) : (
+        <span />
+      )}
       {brain.state_reason && (
         <p className="col-span-full text-xs text-text-secondary">
           {brain.state_reason}
         </p>
       )}
-    </>
-  );
-  const className =
-    "brain-table-grid grid min-w-credentials items-center gap-4 border-b border-divider px-4 py-3 last:border-b-0 hover:bg-surface";
-
-  return brain.state === "ready" ? (
-    <Link className={className} to={brainUrl(brain.source_id)}>
-      {content}
-    </Link>
-  ) : (
-    <div className={`${className} text-text-muted`} aria-disabled="true">
-      {content}
     </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="14"
+      viewBox="0 0 24 24"
+      width="14"
+    >
+      <path
+        d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
   );
 }

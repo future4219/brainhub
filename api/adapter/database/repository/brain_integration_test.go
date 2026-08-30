@@ -96,4 +96,20 @@ func TestBrainRepositoryWithPostgres(t *testing.T) {
 	if _, err := store.TransitionBrain(ctx, brain.ID, entconst.BrainStateFailed, "late failure", now.Add(2*time.Second)); !errors.Is(err, output_port.ErrConflict) {
 		t.Fatalf("second transition error = %v", err)
 	}
+	archivedAt := now.Add(3 * time.Second)
+	if err := store.ArchiveBrain(ctx, brain.ID, archivedAt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FindBrainBySourceID(ctx, brain.SourceID); !errors.Is(err, output_port.ErrNotFound) {
+		t.Fatalf("archived brain lookup error = %v", err)
+	}
+	brains, err := store.ListBrains(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, listed := range brains {
+		if listed.ID == brain.ID {
+			t.Fatalf("archived brain remained in list: %+v", listed)
+		}
+	}
 }

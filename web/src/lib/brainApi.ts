@@ -63,3 +63,9 @@ export function getPublicConfig(): Promise<PublicConfig> {
 export function createBrain(input: CreateBrainInput): Promise<Brain> {
   return postJSON("/brains", input);
 }
+
+export function archiveBrain(sourceID: string): Promise<void> {
+  return requestJSON(`/brains/${encodeURIComponent(sourceID)}`, {
+    method: "DELETE",
+  });
+}

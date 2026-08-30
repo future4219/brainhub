@@ -147,7 +147,7 @@
   }
 
   .brain-table-grid {
-    grid-template-columns: minmax(var(--bh-brain-name-min), var(--bh-brain-name-width)) minmax(var(--bh-brain-name-min), 1fr) var(--bh-brain-pages-width) var(--bh-brain-updated-width) var(--bh-brain-state-width);
+    grid-template-columns: minmax(var(--bh-brain-name-min), var(--bh-brain-name-width)) minmax(var(--bh-brain-name-min), 1fr) var(--bh-brain-pages-width) var(--bh-brain-updated-width) var(--bh-brain-state-width) var(--bh-control-height-sm);
   }
 
   .invite-table-grid {

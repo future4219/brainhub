@@ -10,6 +10,7 @@ import (
 type AccessBrainRepository interface {
 	FindBrainByID(context.Context, string) (entity.Brain, error)
 	FindBrainBySourceID(context.Context, entity.SourceID) (entity.Brain, error)
+	ArchiveBrain(context.Context, string, time.Time) error
 }
 
 type InvitationRepository interface {
@@ -19,6 +20,7 @@ type InvitationRepository interface {
 	ListInvitationsByBrain(context.Context, string) ([]entity.Invitation, error)
 	AcceptInvitation(context.Context, string, string, time.Time) error
 	RevokeInvitation(context.Context, string) error
+	RevokePendingInvitationsByBrain(context.Context, string) error
 }
 
 type AccessMembershipRepository interface {
@@ -33,12 +35,14 @@ type IssuedClientRepository interface {
 	FindIssuedClientByID(context.Context, string) (entity.IssuedClient, error)
 	ListIssuedClientsByUserBrain(context.Context, string, string) ([]entity.IssuedClient, error)
 	ListRevocableIssuedClientsByUserBrain(context.Context, string, string) ([]entity.IssuedClient, error)
+	ListRevocableIssuedClientsByBrain(context.Context, string) ([]entity.IssuedClient, error)
 	ActivateIssuedClient(context.Context, string, string, time.Time) (entity.IssuedClient, error)
 	MarkIssuedClientOrphan(context.Context, string, *string, string) (entity.IssuedClient, error)
 	MarkIssuedClientRevoked(context.Context, string, time.Time) (entity.IssuedClient, error)
 }
 
 type AccessRepositories interface {
+	AccessBrainRepository
 	InvitationRepository
 	AccessMembershipRepository
 }

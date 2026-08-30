@@ -327,6 +327,32 @@ func (u *accessUseCase) RevokeMembership(ctx context.Context, sourceID entity.So
 	return u.revokeAllBrainClients(ctx, userID, brain.ID)
 }
 
+func (u *accessUseCase) ArchiveBrain(ctx context.Context, sourceID entity.SourceID, actorID string) error {
+	brain, membership, err := u.brainAndMembership(ctx, sourceID, actorID)
+	if err != nil {
+		return err
+	}
+	if membership.Role != entity.RoleOwner {
+		return input_port.ErrForbidden
+	}
+	clients, err := u.clients.ListRevocableIssuedClientsByBrain(ctx, brain.ID)
+	if err != nil {
+		return fmt.Errorf("list clients for brain archive: %w", err)
+	}
+	if err := u.revokeClients(ctx, clients); err != nil {
+		return err
+	}
+	if err := u.transactions.WithinAccessTransaction(ctx, func(repositories output_port.AccessRepositories) error {
+		if err := repositories.RevokePendingInvitationsByBrain(ctx, brain.ID); err != nil {
+			return err
+		}
+		return repositories.ArchiveBrain(ctx, brain.ID, u.clock.Now())
+	}); err != nil {
+		return fmt.Errorf("archive brain: %w", err)
+	}
+	return nil
+}
+
 func (u *accessUseCase) brainAndMembership(ctx context.Context, sourceID entity.SourceID, userID string) (entity.Brain, entity.Membership, error) {
 	brain, err := u.brains.FindBrainBySourceID(ctx, sourceID)
 	if errors.Is(err, output_port.ErrNotFound) {
@@ -350,6 +376,10 @@ func (u *accessUseCase) revokeAllBrainClients(ctx context.Context, userID, brain
 	if err != nil {
 		return fmt.Errorf("list clients for membership revocation: %w", err)
 	}
+	return u.revokeClients(ctx, clients)
+}
+
+func (u *accessUseCase) revokeClients(ctx context.Context, clients []entity.IssuedClient) error {
 	var failures []error
 	for _, client := range clients {
 		if err := u.admin.RevokeClient(ctx, *client.GBrainClientID); err != nil {

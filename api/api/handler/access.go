@@ -152,6 +152,18 @@ func (h *AccessHandler) RevokeMembership(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *AccessHandler) ArchiveBrain(w http.ResponseWriter, r *http.Request) {
+	sourceID, ok := sourceIDFromRequest(w, r)
+	if !ok {
+		return
+	}
+	current, _ := middleware.Current(r)
+	if accessError(w, h.useCase.ArchiveBrain(r.Context(), sourceID, current.User.ID)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func decodeAccessJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
 	decoder := json.NewDecoder(io.LimitReader(r.Body, maxJSONBodyBytes))
 	decoder.DisallowUnknownFields()

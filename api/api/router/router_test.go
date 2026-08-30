@@ -140,7 +140,8 @@ type authUseCase struct {
 }
 
 type accessUseCase struct {
-	now time.Time
+	now      time.Time
+	archived entity.SourceID
 }
 
 func (u *accessUseCase) CreateInvitation(_ context.Context, _ entity.SourceID, actorID string, input input_port.CreateInvitationInput) (entity.Invitation, string, error) {
@@ -179,6 +180,11 @@ func (u *accessUseCase) RevokeClient(context.Context, string, string) (entity.Is
 }
 
 func (u *accessUseCase) RevokeMembership(context.Context, entity.SourceID, string, string) error {
+	return nil
+}
+
+func (u *accessUseCase) ArchiveBrain(_ context.Context, sourceID entity.SourceID, _ string) error {
+	u.archived = sourceID
 	return nil
 }
 
@@ -577,6 +583,19 @@ func TestRoutes(t *testing.T) {
 			if response.StatusCode != test.status {
 				t.Errorf("%s %s = %d; want %d", test.method, test.path, response.StatusCode, test.status)
 			}
+		}
+	})
+
+	t.Run("archive brain", func(t *testing.T) {
+		request, _ := http.NewRequest(http.MethodDelete, server.URL+"/api/brains/brainhub", nil)
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent || access.archived != "brainhub" {
+			t.Fatalf("status/source = %d %q", response.StatusCode, access.archived)
 		}
 	})
 

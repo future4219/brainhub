@@ -22,6 +22,7 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	mux.Handle("POST /api/brains", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Create)))
 	mux.Handle("POST /api/brains/{sourceID}/adopt", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Adopt)))
 	mux.Handle("POST /api/brains/{sourceID}/writer/reissue", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.ReissueWriter)))
+	mux.Handle("DELETE /api/brains/{sourceID}", middleware.RequireSession(authUseCase, http.HandlerFunc(accessHandler.ArchiveBrain)))
 	mux.Handle("GET /api/brains/{sourceID}", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.Get)))
 	mux.Handle("GET /api/brains/{sourceID}/pages", middleware.OptionalSession(authUseCase, http.HandlerFunc(pageHandler.List)))
 	mux.Handle("POST /api/brains/{sourceID}/pages", middleware.RequireSession(authUseCase, http.HandlerFunc(pageHandler.Create)))

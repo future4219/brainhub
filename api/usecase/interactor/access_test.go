@@ -33,7 +33,7 @@ func newAccessStore() *accessStore {
 
 func (s *accessStore) FindBrainByID(_ context.Context, id string) (entity.Brain, error) {
 	for _, brain := range s.brains {
-		if brain.ID == id {
+		if brain.ID == id && brain.ArchivedAt == nil {
 			return brain, nil
 		}
 	}
@@ -42,10 +42,21 @@ func (s *accessStore) FindBrainByID(_ context.Context, id string) (entity.Brain,
 
 func (s *accessStore) FindBrainBySourceID(_ context.Context, sourceID entity.SourceID) (entity.Brain, error) {
 	brain, ok := s.brains[sourceID.String()]
-	if !ok {
+	if !ok || brain.ArchivedAt != nil {
 		return entity.Brain{}, output_port.ErrNotFound
 	}
 	return brain, nil
+}
+
+func (s *accessStore) ArchiveBrain(_ context.Context, id string, now time.Time) error {
+	for sourceID, brain := range s.brains {
+		if brain.ID == id && brain.ArchivedAt == nil {
+			brain.State, brain.StateReason, brain.UpdatedAt, brain.ArchivedAt = entconst.BrainStateArchived, "", now, &now
+			s.brains[sourceID] = brain
+			return nil
+		}
+	}
+	return output_port.ErrConflict
 }
 
 func (s *accessStore) CreateUser(_ context.Context, user entity.User) error {
@@ -109,6 +120,16 @@ func (s *accessStore) RevokeInvitation(_ context.Context, id string) error {
 	invitation := s.invitations[id]
 	invitation.State = entity.InvitationStateRevoked
 	s.invitations[id] = invitation
+	return nil
+}
+
+func (s *accessStore) RevokePendingInvitationsByBrain(_ context.Context, brainID string) error {
+	for id, invitation := range s.invitations {
+		if invitation.BrainID == brainID && invitation.State == entity.InvitationStatePending {
+			invitation.State = entity.InvitationStateRevoked
+			s.invitations[id] = invitation
+		}
+	}
 	return nil
 }
 
@@ -182,6 +203,16 @@ func (s *accessStore) ListRevocableIssuedClientsByUserBrain(ctx context.Context,
 		}
 	}
 	return revocable, nil
+}
+
+func (s *accessStore) ListRevocableIssuedClientsByBrain(_ context.Context, brainID string) ([]entity.IssuedClient, error) {
+	var clients []entity.IssuedClient
+	for _, client := range s.clients {
+		if client.BrainID == brainID && client.GBrainClientID != nil && (client.State == entity.ClientStateActive || client.State == entity.ClientStateOrphan) {
+			clients = append(clients, client)
+		}
+	}
+	return clients, nil
 }
 
 func (s *accessStore) ActivateIssuedClient(_ context.Context, id, gbrainClientID string, now time.Time) (entity.IssuedClient, error) {
@@ -333,3 +364,40 @@ func TestClientFailuresRemainOrphaned(t *testing.T) {
 		t.Fatalf("failed revoke state = %+v", stored)
 	}
 }
+
+func TestOnlyOwnerCanArchiveBrain(t *testing.T) {
+	store, admin, useCase, clock := accessFixture(t)
+	store.memberships[membershipKey("brain-id", "reader")] = entity.Membership{ID: "reader-membership", BrainID: "brain-id", UserID: "reader", Role: entity.RoleReader}
+	clientID := "reader-client"
+	store.clients[clientID] = entity.IssuedClient{ID: clientID, UserID: "reader", BrainID: "brain-id", GBrainClientID: stringPointer("gbrain-reader"), State: entity.ClientStateActive}
+	store.invitations["pending"] = entity.Invitation{ID: "pending", BrainID: "brain-id", State: entity.InvitationStatePending}
+
+	if err := useCase.ArchiveBrain(context.Background(), "brainhub", "reader"); !errors.Is(err, input_port.ErrForbidden) {
+		t.Fatalf("reader archive error = %v", err)
+	}
+	if err := useCase.ArchiveBrain(context.Background(), "brainhub", "owner"); err != nil {
+		t.Fatal(err)
+	}
+	brain := store.brains["brainhub"]
+	if brain.State != entconst.BrainStateArchived || brain.ArchivedAt == nil || !brain.ArchivedAt.Equal(clock.now) {
+		t.Fatalf("archived brain = %+v", brain)
+	}
+	if store.clients[clientID].State != entity.ClientStateRevoked || store.invitations["pending"].State != entity.InvitationStateRevoked || !reflect.DeepEqual(admin.revoked, []string{"gbrain-reader"}) {
+		t.Fatalf("client/invitation/admin = %+v %+v %v", store.clients[clientID], store.invitations["pending"], admin.revoked)
+	}
+}
+
+func TestArchiveWaitsForClientRevocation(t *testing.T) {
+	store, admin, useCase, _ := accessFixture(t)
+	store.clients["active"] = entity.IssuedClient{ID: "active", BrainID: "brain-id", GBrainClientID: stringPointer("gbrain-active"), State: entity.ClientStateActive}
+	admin.revokeErr = errors.New("revoke unavailable")
+
+	if err := useCase.ArchiveBrain(context.Background(), "brainhub", "owner"); !errors.Is(err, input_port.ErrGBrainAdmin) {
+		t.Fatalf("archive error = %v", err)
+	}
+	if brain := store.brains["brainhub"]; brain.ArchivedAt != nil {
+		t.Fatalf("brain archived before clients were revoked: %+v", brain)
+	}
+}
+
+func stringPointer(value string) *string { return &value }
