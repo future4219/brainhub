@@ -103,7 +103,9 @@ export function CreateBrainPresenter({
                   />
                 </FormField>
                 <label className="grid gap-2 border-b border-divider py-4">
-                  <span className="sr-only">脳のURL</span>
+                  <span className="font-mono text-xs uppercase tracking-label text-text-muted">
+                    URL
+                  </span>
                   <div className="flex h-control min-w-0 items-center overflow-hidden rounded-control border border-border-interactive bg-canvas focus-within:border-border-strong">
                     <span className="shrink-0 pl-3 font-mono text-ui text-text-secondary">
                       {addressPrefix}
