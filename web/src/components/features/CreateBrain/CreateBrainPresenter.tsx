@@ -174,7 +174,7 @@ export function CreateBrainPresenter({
                   </Feedback>
                 )}
                 <Button
-                  className="mt-6 w-full text-[var(--bh-color-canvas)]"
+                  className="mt-6 text-[var(--bh-color-canvas)]"
                   type="submit"
                   disabled={submitting}
                 >
