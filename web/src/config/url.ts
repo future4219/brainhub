@@ -17,6 +17,12 @@ export function brainUrl(sourceID: string, tab: BrainTab = "pages"): string {
   return tab === "pages" ? path : `${path}?tab=${tab}`;
 }
 
+export function brainAddressPrefix(publicWebURL: string): string {
+  const url = new URL(publicWebURL);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  return `${url.host}${basePath}/brains/`;
+}
+
 export function invitationUrl(token: string): string {
   return `/invite/${encodeURIComponent(token)}`;
 }

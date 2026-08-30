@@ -91,7 +91,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":8080",
-		Handler:           router.New(brainUseCase, pageUseCase, authUseCase, accessUseCase, configuration.PublicMCPURL, proxy, configuration.Production),
+		Handler:           router.New(brainUseCase, pageUseCase, authUseCase, accessUseCase, configuration.PublicMCPURL, configuration.PublicWebURL, proxy, configuration.Production),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

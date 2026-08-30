@@ -1,5 +1,10 @@
+import type {
+  ChangeEventHandler,
+  FormEventHandler,
+} from "react";
 import { Link } from "react-router-dom";
 
+import type { CreateBrainFailure } from "@/components/features/CreateBrain/createBrainForm";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { Feedback } from "@/components/ui/Feedback";
@@ -7,41 +12,60 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Panel } from "@/components/ui/Panel";
 import { appUrl, loginUrl } from "@/config/url";
-import type { CreateBrainInput } from "@/entities/brain/entity";
 import type { ViewerState } from "@/entities/user/entity";
 
 type CreateBrainPresenterProps = ViewerState & {
+  name: string;
+  sourceID: string;
+  addressPrefix: string;
+  configError: boolean;
   submitting: boolean;
-  error: string;
-  onSubmit: (input: CreateBrainInput) => void;
+  error: CreateBrainFailure | null;
+  onNameChange: ChangeEventHandler<HTMLInputElement>;
+  onSourceIDChange: ChangeEventHandler<HTMLInputElement>;
+  onSubmit: FormEventHandler<HTMLFormElement>;
 };
 
 export function CreateBrainPresenter({
+  name,
+  sourceID,
+  addressPrefix,
+  configError,
   submitting,
   error,
+  onNameChange,
+  onSourceIDChange,
   onSubmit,
   ...shell
 }: CreateBrainPresenterProps) {
+  const sourceIDHint =
+    name.trim() && !sourceID
+      ? "半角英数字で入力してください"
+      : "あとから変更できません";
+
   return (
     <AppShell {...shell} crumbs={["脳", "新しい脳"]}>
       <main className="mx-auto max-w-content px-4 pb-20 pt-8 sm:px-8">
         <div className="grid gap-8 md:grid-cols-2">
           <header>
-            <p className="font-mono text-xs uppercase tracking-section text-text-muted">
-              new repository
-            </p>
-            <h1 className="mt-2 text-title font-semibold tracking-tight">
-              脳を作る
+            <Link
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+              to={appUrl.brainList}
+            >
+              ← 脳の一覧へ
+            </Link>
+            <h1 className="mt-4 text-title font-semibold tracking-tight">
+              新しい脳を作る
             </h1>
             <p className="mt-4 max-w-credentials text-body text-text-secondary">
-              ひとつの領域に、ひとつの脳。source
-              IDは引用とURLに使われ、作成後も変わらない。
+              名前、説明、公開範囲を設定します。
             </p>
           </header>
 
           <Panel>
-            {shell.viewer === undefined && (
-              <Feedback kind="loading">sessionを確認中…</Feedback>
+            {(shell.viewer === undefined ||
+              (shell.viewer && !addressPrefix && !configError)) && (
+              <Feedback kind="loading">作成画面を準備中…</Feedback>
             )}
             {shell.viewer === null && (
               <div className="p-4">
@@ -56,49 +80,65 @@ export function CreateBrainPresenter({
                 </Link>
               </div>
             )}
-            {shell.viewer && (
+            {shell.viewer && configError && (
+              <Feedback kind="error" className="text-left">
+                公開URLを読み込めませんでした。接続を確認して、画面を再読み込みしてください。
+              </Feedback>
+            )}
+            {shell.viewer && addressPrefix && (
               <form
+                aria-busy={submitting}
                 className="px-4 pb-6"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
-                  onSubmit({
-                    source_id: String(data.get("source_id")),
-                    name: String(data.get("name")),
-                    description: String(data.get("description")),
-                    visibility: String(
-                      data.get("visibility"),
-                    ) as CreateBrainInput["visibility"],
-                  });
-                }}
+                onSubmit={onSubmit}
               >
-                <FormField
-                  label="Source ID"
-                  hint="小文字・数字・ハイフン、1〜32文字。defaultは使用不可。"
-                >
-                  <Input
-                    className="font-mono"
-                    name="source_id"
-                    pattern="[a-z0-9-]{1,32}"
-                    maxLength={32}
-                    placeholder="product-research"
-                    required
-                  />
-                </FormField>
                 <FormField label="名前">
                   <Input
                     name="name"
                     maxLength={80}
-                    placeholder="Product research"
+                    placeholder="プロダクト調査"
+                    value={name}
+                    disabled={submitting}
+                    onChange={onNameChange}
                     required
                   />
                 </FormField>
-                <FormField label="説明">
+                <label className="grid gap-2 border-b border-divider py-4">
+                  <span className="sr-only">脳のURL</span>
+                  <div className="flex h-control min-w-0 items-center overflow-hidden rounded-control border border-border-interactive bg-canvas focus-within:border-border-strong">
+                    <span className="shrink-0 pl-3 font-mono text-ui text-text-secondary">
+                      {addressPrefix}
+                    </span>
+                    <input
+                      aria-describedby="source-id-hint"
+                      autoCapitalize="none"
+                      autoComplete="off"
+                      className="min-w-0 flex-1 bg-transparent px-1 font-mono text-ui outline-none focus-visible:outline-none"
+                      name="source_id"
+                      pattern="[a-z0-9-]{1,32}"
+                      maxLength={32}
+                      placeholder="product-research"
+                      spellCheck={false}
+                      value={sourceID}
+                      disabled={submitting}
+                      onChange={onSourceIDChange}
+                      required
+                    />
+                  </div>
+                  <small
+                    aria-live="polite"
+                    className="text-xs text-text-muted"
+                    id="source-id-hint"
+                  >
+                    {sourceIDHint}
+                  </small>
+                </label>
+                <FormField label="説明（任意）">
                   <textarea
-                    className="field-control"
+                    className="field-control h-auto min-h-0"
                     name="description"
                     maxLength={500}
-                    rows={5}
+                    rows={2}
+                    disabled={submitting}
                   />
                 </FormField>
                 <FormField label="公開範囲">
@@ -106,21 +146,32 @@ export function CreateBrainPresenter({
                     className="field-control"
                     name="visibility"
                     defaultValue="private"
+                    disabled={submitting}
                   >
-                    <option value="private">private — 所有者だけ</option>
-                    <option value="public">public — 誰でも閲覧可能</option>
+                    <option value="private">
+                      private — 招待した人だけが見られる
+                    </option>
+                    <option value="public">public — 誰でも見られる</option>
                   </select>
                 </FormField>
                 {error && (
-                  <Feedback kind="error" className="-mx-4">
-                    {error}
+                  <Feedback kind="error" className="-mx-4 text-left">
+                    {error.messages.map((message, index) => (
+                      <p className={index ? "mt-2" : undefined} key={message}>
+                        {message}
+                      </p>
+                    ))}
+                    {error.showBrainList && (
+                      <Link
+                        className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-4`}
+                        to={appUrl.brainList}
+                      >
+                        脳の一覧を見る
+                      </Link>
+                    )}
                   </Feedback>
                 )}
-                <Button
-                  className="mt-6"
-                  type="submit"
-                  disabled={submitting}
-                >
+                <Button className="mt-6" type="submit" disabled={submitting}>
                   {submitting ? "作成中…" : "脳を作る"}
                 </Button>
               </form>

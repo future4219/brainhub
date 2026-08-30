@@ -10,6 +10,7 @@ import (
 )
 
 const defaultPublicMCPURL = "http://localhost:8080/mcp"
+const defaultPublicWebURL = "http://localhost:3000"
 
 type Config struct {
 	DatabaseURL         string
@@ -21,6 +22,7 @@ type Config struct {
 	ShimURL             string
 	ShimToken           string
 	PublicMCPURL        string
+	PublicWebURL        string
 	PublicPageTypes     string
 	Production          bool
 }
@@ -58,6 +60,7 @@ func Load() (Config, error) {
 		ShimURL:             envOrDefault("BRAINHUB_SHIM_URL", "http://127.0.0.1:8081"),
 		ShimToken:           shimToken,
 		PublicMCPURL:        envOrDefault("PUBLIC_MCP_URL", defaultPublicMCPURL),
+		PublicWebURL:        envOrDefault("PUBLIC_WEB_URL", defaultPublicWebURL),
 		PublicPageTypes:     envOrDefault("GBRAIN_PUBLIC_PAGE_TYPES", interactor.DefaultPublicPageTypes),
 		Production:          os.Getenv("BRAINHUB_ENV") == "production",
 	}, nil

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   brainTab,
+  brainAddressPrefix,
   brainUrl,
   invitationUrl,
   editPageUrl,
@@ -9,10 +10,35 @@ import {
   newPageUrl,
   pageUrl,
 } from "./url.ts";
+import {
+  createBrainFailure,
+  sourceIDCandidate,
+} from "../components/features/CreateBrain/createBrainForm.ts";
 import { connectionSteps, formatDate, pageSignature } from "../lib/format.ts";
 import { safeNextPath } from "../lib/security.ts";
 
 assert.equal(brainTab("?tab=invites"), "invites");
+assert.equal(brainAddressPrefix("https://brainhub.example.com"), "brainhub.example.com/brains/");
+assert.equal(brainAddressPrefix("http://localhost:3000/app/"), "localhost:3000/app/brains/");
+assert.equal(sourceIDCandidate(" Product  Research "), "product-research");
+assert.equal(sourceIDCandidate("製品 調査"), "");
+assert.equal(sourceIDCandidate("A___B -- C"), "ab-c");
+assert.ok(sourceIDCandidate("a".repeat(40)).length <= 32);
+assert.deepEqual(
+  createBrainFailure({
+    status: 502,
+    message: "brain provisioning failed: shim unavailable",
+    data: { brain: { state: "failed" } },
+  }),
+  {
+    messages: [
+      "GBrain側で脳を作成できませんでした。",
+      "詳細: brain provisioning failed: shim unavailable",
+      "この脳は一覧に [failed] として残っています。一覧で状態理由を確認し、GBrainの接続を復旧してから管理者に再処理を依頼してください。",
+    ],
+    showBrainList: true,
+  },
+);
 assert.equal(brainTab("?connect=1"), "connect");
 assert.equal(brainUrl("brainhub", "connect"), "/brains/brainhub?tab=connect");
 assert.equal(invitationUrl("a/b"), "/invite/a%2Fb");

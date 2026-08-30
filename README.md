@@ -114,6 +114,8 @@ SHIM_TOKEN=
 # 公開先を変える場合は2つを同じoriginに揃える
 GBRAIN_PUBLIC_URL=http://localhost:8080
 PUBLIC_MCP_URL=http://localhost:8080/mcp
+# ブラウザで開く公開URL。脳のアドレス表示に使う
+PUBLIC_WEB_URL=http://localhost:3000
 ```
 
 データ用のホストディレクトリを作る。

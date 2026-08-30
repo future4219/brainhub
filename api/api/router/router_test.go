@@ -240,7 +240,7 @@ func TestRoutes(t *testing.T) {
 		CreatedAt: now, UpdatedAt: now,
 	}}
 	access := &accessUseCase{now: now}
-	server := httptest.NewServer(router.New(brains, pages, auth, access, "https://mcp.example.com/mcp", proxy, false))
+	server := httptest.NewServer(router.New(brains, pages, auth, access, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, false))
 	defer server.Close()
 
 	t.Run("healthz", func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestRoutes(t *testing.T) {
 		if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if response.StatusCode != http.StatusOK || body["mcp_url"] != "https://mcp.example.com/mcp" {
+		if response.StatusCode != http.StatusOK || body["mcp_url"] != "https://mcp.example.com/mcp" || body["web_url"] != "https://brainhub.example.com" {
 			t.Fatalf("status/body = %d %v", response.StatusCode, body)
 		}
 	})
@@ -637,7 +637,7 @@ func TestRoutes(t *testing.T) {
 
 	t.Run("production cookie is secure", func(t *testing.T) {
 		productionAuth := &authUseCase{user: auth.user}
-		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, access, "https://mcp.example.com/mcp", proxy, true))
+		productionServer := httptest.NewServer(router.New(brains, pages, productionAuth, access, "https://mcp.example.com/mcp", "https://brainhub.example.com", proxy, true))
 		defer productionServer.Close()
 		response, err := http.Post(productionServer.URL+"/api/auth/register", "application/json", bytes.NewBufferString(`{"email":"alice@example.com","password":"correct-password","name":"Alice"}`))
 		if err != nil {

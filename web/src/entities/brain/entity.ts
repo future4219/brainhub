@@ -50,7 +50,7 @@ export type CreatePageInput = {
 
 export type UpdatePageInput = Omit<CreatePageInput, "slug">;
 
-export type PublicConfig = { mcp_url: string };
+export type PublicConfig = { mcp_url: string; web_url: string };
 
 export type CreateBrainInput = Pick<
   Brain,

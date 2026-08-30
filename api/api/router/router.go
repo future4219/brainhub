@@ -8,7 +8,7 @@ import (
 	"brainhub/usecase/input_port"
 )
 
-func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCase, authUseCase input_port.AuthUseCase, accessUseCase input_port.AccessUseCase, publicMCPURL string, gbrainProxy http.Handler, secureCookie bool) http.Handler {
+func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCase, authUseCase input_port.AuthUseCase, accessUseCase input_port.AccessUseCase, publicMCPURL, publicWebURL string, gbrainProxy http.Handler, secureCookie bool) http.Handler {
 	mux := http.NewServeMux()
 	brainHandler := handler.NewBrainHandler(brainUseCase)
 	pageHandler := handler.NewPageHandler(pageUseCase)
@@ -16,7 +16,7 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	accessHandler := handler.NewAccessHandler(accessUseCase)
 
 	mux.HandleFunc("GET /healthz", handler.Health)
-	mux.HandleFunc("GET /api/config", handler.Config(publicMCPURL))
+	mux.HandleFunc("GET /api/config", handler.Config(publicMCPURL, publicWebURL))
 
 	mux.Handle("GET /api/brains", middleware.OptionalSession(authUseCase, http.HandlerFunc(brainHandler.List)))
 	mux.Handle("POST /api/brains", middleware.RequireSession(authUseCase, http.HandlerFunc(brainHandler.Create)))
