@@ -66,10 +66,17 @@ export function BrainPagePresenter({
             )}
           </div>
           <header className="mt-6 border-b border-border pb-6">
-            <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-text-muted">
-              <span>{page.type}</span>
-              <span>{page.slug}</span>
-              <time dateTime={page.updated_at}>{formatDate(page.updated_at)}</time>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-sm">
+              <span className="rounded-badge border border-border-strong bg-surface-selected px-2 py-1 text-text-tertiary">
+                {page.type}
+              </span>
+              <span className="break-all font-semibold text-text-code">{page.slug}</span>
+              <span aria-hidden="true" className="text-text-muted">
+                ·
+              </span>
+              <time className="text-text-secondary" dateTime={page.updated_at}>
+                {formatDate(page.updated_at)}
+              </time>
             </div>
             <h2 className="mt-3 max-w-content text-title font-semibold leading-copy">
               {page.title}
