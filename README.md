@@ -111,11 +111,12 @@ GBRAIN_ADMIN_BOOTSTRAP_TOKEN=
 # openssl rand -base64 32 で生成し、変更せず保持する
 BRAINHUB_WRITER_CREDENTIAL_KEY=
 SHIM_TOKEN=
-# 公開先を変える場合は2つを同じoriginに揃える
+# brainhub API / MCPの公開origin。末尾スラッシュはどちらでもよい
+BRAINHUB_PUBLIC_URL=http://localhost:8080
+# ブラウザで開く公開origin。脳のアドレス表示とOAuth画面遷移に使う
+BRAINHUB_PUBLIC_WEB_URL=http://localhost:3000
+# GBrainがadvertiseする公開origin
 GBRAIN_PUBLIC_URL=http://localhost:8080
-PUBLIC_MCP_URL=http://localhost:8080/mcp
-# ブラウザで開く公開URL。脳のアドレス表示に使う
-PUBLIC_WEB_URL=http://localhost:3000
 ```
 
 データ用のホストディレクトリを作る。
@@ -219,7 +220,7 @@ REVOKE ALL PRIVILEGES ON DATABASE gbrain FROM brainhub;
 
 APIコンテナはGBrainへ `http://gbrain:3131`、シムへ `http://shim:8081`、brainhub databaseへ `postgres:5432` で接続する。これらの内部URLはComposeが設定するため、`.env` でホスト用URLを二重管理しない。
 
-GBrainのOAuth discoveryはbackend用clientが内部通信で使う。利用者向けのdiscovery、`/authorize`、`/token`、`/revoke` はbrainhubが提供する。公開先を変更するときは、`PUBLIC_MCP_URL` を公開originの `/mcp` に揃える。
+GBrainのOAuth discoveryはbackend用clientが内部通信で使う。利用者向けのdiscovery、`/authorize`、`/token`、`/revoke` はbrainhubが提供する。公開先を変更するときは `BRAINHUB_PUBLIC_URL` に公開originを設定する。`/api/config` のMCP URLとOAuth discoveryのissuer・各endpointはこの値から導出される。
 
 脳の作成と参照:
 

@@ -796,7 +796,11 @@ func TestRoutes(t *testing.T) {
 		if err := json.NewDecoder(response.Body).Decode(&metadata); err != nil {
 			t.Fatal(err)
 		}
-		if response.StatusCode != http.StatusOK || metadata["token_endpoint"] != "https://mcp.example.com/token" {
+		if response.StatusCode != http.StatusOK ||
+			metadata["issuer"] != "https://mcp.example.com/" ||
+			metadata["authorization_endpoint"] != "https://mcp.example.com/authorize" ||
+			metadata["token_endpoint"] != "https://mcp.example.com/token" ||
+			metadata["revocation_endpoint"] != "https://mcp.example.com/revoke" {
 			t.Fatalf("metadata = %d %v", response.StatusCode, metadata)
 		}
 	})

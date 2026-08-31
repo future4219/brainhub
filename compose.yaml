@@ -121,8 +121,8 @@ services:
       GBRAIN_BASE_URL: http://gbrain:3131
       BRAINHUB_SHIM_URL: http://shim:8081
       SHIM_TOKEN: ${SHIM_TOKEN:?SHIM_TOKEN must be set}
-      PUBLIC_MCP_URL: ${PUBLIC_MCP_URL:-http://localhost:8080/mcp}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      BRAINHUB_PUBLIC_URL: ${BRAINHUB_PUBLIC_URL:-http://localhost:8080}
+      BRAINHUB_PUBLIC_WEB_URL: ${BRAINHUB_PUBLIC_WEB_URL:-http://localhost:3000}
       BRAINHUB_ENV: ${BRAINHUB_ENV:-}
       GBRAIN_PUBLIC_PAGE_TYPES: ${GBRAIN_PUBLIC_PAGE_TYPES:-}
     ports:

@@ -9,7 +9,7 @@ import (
 	"brainhub/usecase/interactor"
 )
 
-const defaultPublicMCPURL = "http://localhost:8080/mcp"
+const defaultPublicURL = "http://localhost:8080"
 const defaultPublicWebURL = "http://localhost:3000"
 
 type Config struct {
@@ -49,6 +49,8 @@ func Load() (Config, error) {
 	if shimToken == "" {
 		return Config{}, errors.New("SHIM_TOKEN is required")
 	}
+	publicURL := strings.TrimRight(envOrDefault("BRAINHUB_PUBLIC_URL", defaultPublicURL), "/")
+	publicWebURL := strings.TrimRight(envOrDefault("BRAINHUB_PUBLIC_WEB_URL", defaultPublicWebURL), "/")
 
 	return Config{
 		DatabaseURL:         databaseURL,
@@ -59,8 +61,8 @@ func Load() (Config, error) {
 		WriterCredentialKey: writerCredentialKey,
 		ShimURL:             envOrDefault("BRAINHUB_SHIM_URL", "http://127.0.0.1:8081"),
 		ShimToken:           shimToken,
-		PublicMCPURL:        envOrDefault("PUBLIC_MCP_URL", defaultPublicMCPURL),
-		PublicWebURL:        envOrDefault("PUBLIC_WEB_URL", defaultPublicWebURL),
+		PublicMCPURL:        publicURL + "/mcp",
+		PublicWebURL:        publicWebURL,
 		PublicPageTypes:     envOrDefault("GBRAIN_PUBLIC_PAGE_TYPES", interactor.DefaultPublicPageTypes),
 		Production:          os.Getenv("BRAINHUB_ENV") == "production",
 	}, nil
