@@ -92,8 +92,42 @@ func TestMCPRepositoryAuthorizationBoundaryWithPostgres(t *testing.T) {
 	if storedTokens != 2 {
 		t.Fatalf("stored token count = %d; want 2", storedTokens)
 	}
+	label := "codex"
+	cliToken := entity.MCPToken{
+		ID: ids.New(), Type: entity.MCPTokenCLI, UserID: user.ID, Label: &label,
+		ExpiresAt: now.Add(90 * 24 * time.Hour), CreatedAt: now,
+	}
+	rawCLI, err := store.CreateMCPCLIToken(ctx, cliToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var storedCLIHash, storedCLILabel string
+	var storedCLIClientID *string
+	if err := pool.QueryRow(ctx, `
+		SELECT token_hash, label, client_id FROM mcp_tokens WHERE id = $1`, cliToken.ID,
+	).Scan(&storedCLIHash, &storedCLILabel, &storedCLIClientID); err != nil {
+		t.Fatal(err)
+	}
+	if len(storedCLIHash) != 64 || storedCLIHash == rawCLI || storedCLILabel != label || storedCLIClientID != nil {
+		t.Fatalf("stored CLI token = hash_length:%d equals_raw:%t label:%q client:%v", len(storedCLIHash), storedCLIHash == rawCLI, storedCLILabel, storedCLIClientID)
+	}
+	listedCLI, err := store.ListMCPCLITokens(ctx, user.ID)
+	if err != nil || len(listedCLI) != 1 || listedCLI[0].ID != cliToken.ID || listedCLI[0].Label == nil || *listedCLI[0].Label != label {
+		t.Fatalf("listed CLI tokens = %+v %v", listedCLI, err)
+	}
+	otherCLI, err := store.ListMCPCLITokens(ctx, other.ID)
+	if err != nil || len(otherCLI) != 0 {
+		t.Fatalf("other user CLI tokens = %+v %v", otherCLI, err)
+	}
 	if _, err := store.VerifyMCPAccessToken(ctx, access, now); err != nil {
 		t.Fatal(err)
+	}
+	verifiedCLI, err := store.VerifyMCPAccessToken(ctx, rawCLI, now)
+	if err != nil || verifiedCLI.UserID != user.ID || verifiedCLI.Type != entity.MCPTokenCLI {
+		t.Fatalf("verified CLI token = %+v %v", verifiedCLI, err)
+	}
+	if _, err := store.VerifyMCPAccessToken(ctx, rawCLI, cliToken.ExpiresAt); !errors.Is(err, output_port.ErrTokenExpired) {
+		t.Fatalf("expired CLI token error = %v", err)
 	}
 	if _, err := store.VerifyMCPAccessToken(ctx, access, now.Add(2*time.Hour)); !errors.Is(err, output_port.ErrNotFound) {
 		t.Fatalf("expired token error = %v", err)
@@ -133,6 +167,15 @@ func TestMCPRepositoryAuthorizationBoundaryWithPostgres(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, "UPDATE users SET state = 'active' WHERE id = $1", user.ID); err != nil {
 		t.Fatal(err)
+	}
+	if err := store.RevokeMCPCLIToken(ctx, cliToken.ID, other.ID, now.Add(time.Second)); !errors.Is(err, output_port.ErrNotFound) {
+		t.Fatalf("foreign CLI revoke error = %v", err)
+	}
+	if err := store.RevokeMCPCLIToken(ctx, cliToken.ID, user.ID, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.VerifyMCPAccessToken(ctx, rawCLI, now); !errors.Is(err, output_port.ErrNotFound) {
+		t.Fatalf("revoked CLI token error = %v", err)
 	}
 	if err := store.RevokeMCPToken(ctx, access, client.ID, now.Add(2*time.Second)); err != nil {
 		t.Fatal(err)

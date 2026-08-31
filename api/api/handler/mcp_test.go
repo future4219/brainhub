@@ -25,6 +25,10 @@ func (s *mcpHandlerUseCaseStub) Connection(context.Context, string) (input_port.
 func (s *mcpHandlerUseCaseStub) IssueClient(context.Context, string) (entity.MCPClient, error) {
 	return entity.MCPClient{}, nil
 }
+func (s *mcpHandlerUseCaseStub) IssueCLIToken(context.Context, string, string) (input_port.IssuedCLIToken, error) {
+	return input_port.IssuedCLIToken{}, nil
+}
+func (s *mcpHandlerUseCaseStub) RevokeCLIToken(context.Context, string, string) error { return nil }
 func (s *mcpHandlerUseCaseStub) ValidateAuthorization(context.Context, input_port.OAuthAuthorizationRequest, string) (input_port.OAuthAuthorization, error) {
 	return input_port.OAuthAuthorization{}, nil
 }
@@ -109,5 +113,22 @@ func TestMCPHandlerRejectsSearchAsToolResultAndLegacyTokenAs401(t *testing.T) {
 	}
 	if got := legacyResponse.Header().Get("WWW-Authenticate"); got != `Bearer resource_metadata="https://brainhub.example/.well-known/oauth-protected-resource/mcp"` {
 		t.Fatalf("WWW-Authenticate = %q", got)
+	}
+}
+
+func TestMCPHandlerExplainsExpiredCLIToken(t *testing.T) {
+	useCase := &mcpHandlerUseCaseStub{error: input_port.ErrMCPTokenExpired}
+	handler := NewMCPHandler(useCase, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("expired token must not reach GBrain")
+	}), "https://brainhub.example/.well-known/oauth-protected-resource/mcp")
+	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"list_pages","arguments":{}}}`))
+	request.Header.Set("Authorization", "Bearer brainhub-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"error":"token_expired"`) || !strings.Contains(response.Body.String(), "Issue a new CLI token") {
+		t.Fatalf("expired response = %d %q", response.Code, response.Body.String())
+	}
+	if header := response.Header().Get("WWW-Authenticate"); !strings.Contains(header, `error="invalid_token"`) || !strings.Contains(header, "CLI token expired") {
+		t.Fatalf("WWW-Authenticate = %q", header)
 	}
 }

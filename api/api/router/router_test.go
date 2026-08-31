@@ -145,7 +145,7 @@ type accessUseCase struct {
 	archived entity.SourceID
 }
 
-type mcpUseCase struct{}
+type mcpUseCase struct{ revokedCLIToken string }
 
 func (u *mcpUseCase) Connection(context.Context, string) (input_port.MCPConnection, error) {
 	return input_port.MCPConnection{}, nil
@@ -153,6 +153,22 @@ func (u *mcpUseCase) Connection(context.Context, string) (input_port.MCPConnecti
 
 func (u *mcpUseCase) IssueClient(_ context.Context, userID string) (entity.MCPClient, error) {
 	return entity.MCPClient{ID: "mcp-client", UserID: userID, Name: "claude-web"}, nil
+}
+
+func (u *mcpUseCase) IssueCLIToken(_ context.Context, userID, label string) (input_port.IssuedCLIToken, error) {
+	return input_port.IssuedCLIToken{
+		Token: entity.MCPToken{
+			ID: "cli-token-id", Type: entity.MCPTokenCLI, UserID: userID, Label: &label,
+			CreatedAt: time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC),
+			ExpiresAt: time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC),
+		},
+		RawToken: "raw-cli-token",
+	}, nil
+}
+
+func (u *mcpUseCase) RevokeCLIToken(_ context.Context, id, _ string) error {
+	u.revokedCLIToken = id
+	return nil
 }
 
 func (u *mcpUseCase) ValidateAuthorization(_ context.Context, input input_port.OAuthAuthorizationRequest, userID string) (input_port.OAuthAuthorization, error) {
@@ -482,6 +498,44 @@ func TestRoutes(t *testing.T) {
 		}
 		if response.StatusCode != http.StatusOK || user["email"] != "alice@example.com" {
 			t.Fatalf("status/user = %d %v", response.StatusCode, user)
+		}
+	})
+
+	t.Run("CLI token issue and revoke require session and reveal raw token once", func(t *testing.T) {
+		unauthorized, err := http.Post(server.URL+"/api/mcp/tokens", "application/json", bytes.NewBufferString(`{"label":"codex"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		unauthorized.Body.Close()
+		if unauthorized.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("unauthorized status = %d", unauthorized.StatusCode)
+		}
+
+		request, _ := http.NewRequest(http.MethodPost, server.URL+"/api/mcp/tokens", bytes.NewBufferString(`{"label":"codex"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(sessionCookie)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var issued map[string]any
+		if err := json.NewDecoder(response.Body).Decode(&issued); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusCreated || response.Header.Get("Cache-Control") != "no-store" || issued["token"] != "raw-cli-token" || issued["label"] != "codex" {
+			t.Fatalf("issued = %d %q %v", response.StatusCode, response.Header.Get("Cache-Control"), issued)
+		}
+
+		revoke, _ := http.NewRequest(http.MethodDelete, server.URL+"/api/mcp/tokens/cli-token-id", nil)
+		revoke.AddCookie(sessionCookie)
+		revoked, err := http.DefaultClient.Do(revoke)
+		if err != nil {
+			t.Fatal(err)
+		}
+		revoked.Body.Close()
+		if revoked.StatusCode != http.StatusNoContent || mcp.revokedCLIToken != "cli-token-id" {
+			t.Fatalf("revoke = %d %q", revoked.StatusCode, mcp.revokedCLIToken)
 		}
 	})
 

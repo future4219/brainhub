@@ -1,7 +1,10 @@
 import type { BrainTab } from "@/config/url";
 import type { Invitation, Role } from "@/entities/access/entity";
 import type { Brain, Page, PublicConfig } from "@/entities/brain/entity";
-import type { MCPConnection } from "@/entities/mcp/entity";
+import type {
+  CreatedMCPCLIToken,
+  MCPConnection,
+} from "@/entities/mcp/entity";
 import type { ViewerState } from "@/entities/user/entity";
 
 export type PageSort = "updated" | "slug";
@@ -37,6 +40,11 @@ export type ConnectSectionProps = {
   config: PublicConfig | null;
   connection: MCPConnection | null;
   error: string;
+  cliTokenLabel: string;
+  createdCLIToken: CreatedMCPCLIToken | null;
+  cliTokenSubmitting: boolean;
+  cliTokenRevoking: string;
+  cliTokenError: string;
   submitting: boolean;
   readerReissuing: boolean;
   readerStatus: string;
@@ -46,6 +54,9 @@ export type ConnectSectionProps = {
   copyState: CopyState;
   onCopy: (key: string, value: string) => void;
   onIssue: () => void;
+  onCLITokenLabel: (label: string) => void;
+  onIssueCLIToken: () => void;
+  onRevokeCLIToken: (id: string) => void;
   onReissueReader: () => void;
   onReissueWriter: () => void;
 };

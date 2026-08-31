@@ -14,6 +14,9 @@ type MCPRepository interface {
 	CreateMCPAuthorizationCode(context.Context, entity.MCPAuthorizationCode) (string, error)
 	ConsumeMCPAuthorizationCode(context.Context, string, string, string, string, time.Time) (entity.MCPAuthorizationCode, error)
 	CreateMCPTokenPair(context.Context, string, string, time.Time, time.Time) (string, string, error)
+	CreateMCPCLIToken(context.Context, entity.MCPToken) (string, error)
+	ListMCPCLITokens(context.Context, string) ([]entity.MCPToken, error)
+	RevokeMCPCLIToken(context.Context, string, string, time.Time) error
 	RotateMCPRefreshToken(context.Context, string, string, time.Time, time.Time, time.Time) (entity.MCPToken, string, string, error)
 	VerifyMCPAccessToken(context.Context, string, time.Time) (entity.MCPToken, error)
 	RevokeMCPToken(context.Context, string, string, time.Time) error

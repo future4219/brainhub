@@ -11,7 +11,10 @@ import type {
   Role,
 } from "@/entities/access/entity";
 import type { Brain, Page, PublicConfig } from "@/entities/brain/entity";
-import type { MCPConnection } from "@/entities/mcp/entity";
+import type {
+  CreatedMCPCLIToken,
+  MCPConnection,
+} from "@/entities/mcp/entity";
 import { useViewer } from "@/hooks/useViewer";
 import {
   createInvitation,
@@ -29,7 +32,9 @@ import {
 import {
   getMCPConnection,
   issueMCPClient,
+  issueMCPCLIToken,
   reissueMCPReader,
+  revokeMCPCLIToken,
 } from "@/lib/mcpApi";
 
 export function BrainDetailContainer() {
@@ -47,6 +52,12 @@ export function BrainDetailContainer() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [connection, setConnection] = useState<MCPConnection | null>(null);
   const [connectError, setConnectError] = useState("");
+  const [cliTokenLabel, setCLITokenLabel] = useState("");
+  const [createdCLIToken, setCreatedCLIToken] =
+    useState<CreatedMCPCLIToken | null>(null);
+  const [cliTokenSubmitting, setCLITokenSubmitting] = useState(false);
+  const [cliTokenRevoking, setCLITokenRevoking] = useState("");
+  const [cliTokenError, setCLITokenError] = useState("");
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [inviteAuthorized, setInviteAuthorized] = useState<boolean | null>(null);
   const [inviteError, setInviteError] = useState("");
@@ -214,6 +225,44 @@ export function BrainDetailContainer() {
     }
   }
 
+  async function createCLIToken() {
+    setCLITokenSubmitting(true);
+    setCLITokenError("");
+    try {
+      const issued = await issueMCPCLIToken(cliTokenLabel);
+      setCreatedCLIToken(issued);
+      setCLITokenLabel("");
+      setCopyState((current) => {
+        const next = { ...current };
+        delete next["cli-token"];
+        return next;
+      });
+      await refreshConnection();
+    } catch {
+      setCLITokenError(
+        "CLI用トークンを発行できません。ラベルを確認して、もう一度発行してください。",
+      );
+    } finally {
+      setCLITokenSubmitting(false);
+    }
+  }
+
+  async function revokeCLIToken(id: string) {
+    setCLITokenRevoking(id);
+    setCLITokenError("");
+    try {
+      await revokeMCPCLIToken(id);
+      if (createdCLIToken?.id === id) setCreatedCLIToken(null);
+      await refreshConnection();
+    } catch {
+      setCLITokenError(
+        "CLI用トークンを失効できません。再読み込みして、もう一度実行してください。",
+      );
+    } finally {
+      setCLITokenRevoking("");
+    }
+  }
+
   async function reissueReader() {
     setReaderReissuing(true);
     setReaderStatus("");
@@ -333,6 +382,11 @@ export function BrainDetailContainer() {
           config,
           connection,
           error: connectError,
+          cliTokenLabel,
+          createdCLIToken,
+          cliTokenSubmitting,
+          cliTokenRevoking,
+          cliTokenError,
           submitting,
           readerReissuing,
           readerStatus,
@@ -345,6 +399,9 @@ export function BrainDetailContainer() {
           copyState,
           onCopy: copy,
           onIssue: createClient,
+          onCLITokenLabel: setCLITokenLabel,
+          onIssueCLIToken: createCLIToken,
+          onRevokeCLIToken: revokeCLIToken,
           onReissueReader: reissueReader,
           onReissueWriter: reissueBrainWriter,
         }}

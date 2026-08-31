@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"brainhub/adapter/database/model"
@@ -92,6 +93,65 @@ func (s *Store) CreateMCPTokenPair(ctx context.Context, clientID, userID string,
 	return access, refresh, nil
 }
 
+func (s *Store) CreateMCPCLIToken(ctx context.Context, token entity.MCPToken) (string, error) {
+	raw, err := randomToken(s.random)
+	if err != nil {
+		return "", err
+	}
+	tag, err := s.queries.Exec(ctx, `
+		INSERT INTO mcp_tokens (
+			id, token_hash, token_type, client_id, user_id, label, expires_at, created_at
+		)
+		SELECT $1, $2, 'cli', NULL, u.id, $3, $4, $5
+		FROM users u
+		WHERE u.id = $6 AND u.state = 'active'`,
+		token.ID, hashToken(raw), token.Label, token.ExpiresAt, token.CreatedAt, token.UserID,
+	)
+	if err != nil {
+		return "", mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return "", output_port.ErrNotFound
+	}
+	return raw, nil
+}
+
+func (s *Store) ListMCPCLITokens(ctx context.Context, userID string) ([]entity.MCPToken, error) {
+	rows, err := s.queries.Query(ctx, `
+		SELECT id, token_type, client_id, user_id, label, expires_at, created_at, revoked_at
+		FROM mcp_tokens
+		WHERE user_id = $1 AND token_type = 'cli' AND revoked_at IS NULL
+		ORDER BY created_at DESC, id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	tokens := make([]entity.MCPToken, 0)
+	for rows.Next() {
+		token, err := scanMCPToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, token)
+	}
+	return tokens, rows.Err()
+}
+
+func (s *Store) RevokeMCPCLIToken(ctx context.Context, id, userID string, now time.Time) error {
+	tag, err := s.queries.Exec(ctx, `
+		UPDATE mcp_tokens SET revoked_at = $1
+		WHERE id = $2 AND user_id = $3 AND token_type = 'cli' AND revoked_at IS NULL`,
+		now, id, userID,
+	)
+	if err != nil {
+		return mapError(err)
+	}
+	if tag.RowsAffected() != 1 {
+		return output_port.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) RotateMCPRefreshToken(ctx context.Context, raw, clientID string, now, accessExpiry, refreshExpiry time.Time) (entity.MCPToken, string, string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -103,9 +163,9 @@ func (s *Store) RotateMCPRefreshToken(ctx context.Context, raw, clientID string,
 		UPDATE mcp_tokens SET revoked_at = $1
 		WHERE token_hash = $2 AND client_id = $3 AND token_type = 'refresh'
 		  AND revoked_at IS NULL AND expires_at > $1
-		RETURNING id, token_type, client_id, user_id, expires_at, created_at, revoked_at`,
+		RETURNING id, token_type, client_id, user_id, label, expires_at, created_at, revoked_at`,
 		now, hashToken(raw), clientID,
-	).Scan(&token.ID, &token.Type, &token.ClientID, &token.UserID, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
+	).Scan(&token.ID, &token.Type, &token.ClientID, &token.UserID, &token.Label, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
 	if err != nil {
 		return entity.MCPToken{}, "", "", mapError(err)
 	}
@@ -155,17 +215,36 @@ func (s *Store) insertMCPTokenPair(ctx context.Context, tx pgx.Tx, clientID, use
 func (s *Store) VerifyMCPAccessToken(ctx context.Context, raw string, now time.Time) (entity.MCPToken, error) {
 	var token model.MCPToken
 	err := s.queries.QueryRow(ctx, `
-		SELECT t.id, t.token_type, t.client_id, t.user_id, t.expires_at, t.created_at, t.revoked_at
+		SELECT t.id, t.token_type, t.client_id, t.user_id, t.label, t.expires_at, t.created_at, t.revoked_at
 		FROM mcp_tokens t
-		JOIN mcp_clients c ON c.id = t.client_id AND c.user_id = t.user_id AND c.revoked_at IS NULL
+		LEFT JOIN mcp_clients c ON c.id = t.client_id AND c.user_id = t.user_id AND c.revoked_at IS NULL
 		JOIN users u ON u.id = t.user_id AND u.state = 'active'
-		WHERE t.token_hash = $1 AND t.token_type = 'access'
-		  AND t.revoked_at IS NULL AND t.expires_at > $2`, hashToken(raw), now,
-	).Scan(&token.ID, &token.Type, &token.ClientID, &token.UserID, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
-	if err != nil {
+		WHERE t.token_hash = $1 AND t.token_type IN ('access', 'cli')
+		  AND t.revoked_at IS NULL AND t.expires_at > $2
+		  AND ((t.token_type = 'access' AND c.id IS NOT NULL)
+		       OR (t.token_type = 'cli' AND t.client_id IS NULL))`, hashToken(raw), now,
+	).Scan(&token.ID, &token.Type, &token.ClientID, &token.UserID, &token.Label, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
+	if err == nil {
+		return tokenEntity(token), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
 		return entity.MCPToken{}, mapError(err)
 	}
-	return tokenEntity(token), nil
+	var expired bool
+	if err := s.queries.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM mcp_tokens t
+			JOIN users u ON u.id = t.user_id AND u.state = 'active'
+			WHERE t.token_hash = $1 AND t.token_type = 'cli'
+			  AND t.client_id IS NULL AND t.revoked_at IS NULL AND t.expires_at <= $2
+		)`, hashToken(raw), now).Scan(&expired); err != nil {
+		return entity.MCPToken{}, mapError(err)
+	}
+	if expired {
+		return entity.MCPToken{}, output_port.ErrTokenExpired
+	}
+	return entity.MCPToken{}, output_port.ErrNotFound
 }
 
 func (s *Store) RevokeMCPToken(ctx context.Context, raw, clientID string, now time.Time) error {
@@ -324,6 +403,17 @@ func scanReaderClient(row rowScanner) (entity.ReaderClient, error) {
 	}, nil
 }
 
+func scanMCPToken(row rowScanner) (entity.MCPToken, error) {
+	var token model.MCPToken
+	if err := row.Scan(
+		&token.ID, &token.Type, &token.ClientID, &token.UserID, &token.Label,
+		&token.ExpiresAt, &token.CreatedAt, &token.RevokedAt,
+	); err != nil {
+		return entity.MCPToken{}, mapError(err)
+	}
+	return tokenEntity(token), nil
+}
+
 func sourceIDStrings(sources []entity.SourceID) []string {
 	values := make([]string, len(sources))
 	for i, source := range sources {
@@ -343,6 +433,7 @@ func authorizationCodeEntity(code model.MCPAuthorizationCode) entity.MCPAuthoriz
 func tokenEntity(token model.MCPToken) entity.MCPToken {
 	return entity.MCPToken{
 		ID: token.ID, Type: entity.MCPTokenType(token.Type), ClientID: token.ClientID,
-		UserID: token.UserID, ExpiresAt: token.ExpiresAt, CreatedAt: token.CreatedAt, RevokedAt: token.RevokedAt,
+		UserID: token.UserID, Label: token.Label, ExpiresAt: token.ExpiresAt,
+		CreatedAt: token.CreatedAt, RevokedAt: token.RevokedAt,
 	}
 }

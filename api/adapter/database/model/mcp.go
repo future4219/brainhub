@@ -26,8 +26,9 @@ type MCPAuthorizationCode struct {
 type MCPToken struct {
 	ID        string
 	Type      string
-	ClientID  string
+	ClientID  *string
 	UserID    string
+	Label     *string
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	RevokedAt *time.Time

@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
 )
@@ -22,19 +24,42 @@ type MCPReaderResponse struct {
 	StateReason string `json:"state_reason"`
 }
 
+type MCPCLITokenResponse struct {
+	ID        string    `json:"id"`
+	Label     string    `json:"label"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CreateMCPCLITokenRequest struct {
+	Label string `json:"label"`
+}
+
+type CreatedMCPCLITokenResponse struct {
+	MCPCLITokenResponse
+	Token string `json:"token"`
+}
+
 type MCPConnectionResponse struct {
 	Client        *MCPClientResponse        `json:"client"`
+	CLITokens     []MCPCLITokenResponse     `json:"cli_tokens"`
 	VisibleBrains []MCPVisibleBrainResponse `json:"visible_brains"`
 	Reader        *MCPReaderResponse        `json:"reader"`
 }
 
 func MCPConnectionResponseFromInput(connection input_port.MCPConnection) MCPConnectionResponse {
-	response := MCPConnectionResponse{VisibleBrains: make([]MCPVisibleBrainResponse, len(connection.VisibleBrains))}
+	response := MCPConnectionResponse{
+		CLITokens:     make([]MCPCLITokenResponse, len(connection.CLITokens)),
+		VisibleBrains: make([]MCPVisibleBrainResponse, len(connection.VisibleBrains)),
+	}
 	if connection.Client != nil {
 		response.Client = &MCPClientResponse{ID: connection.Client.ID, Name: connection.Client.Name}
 	}
 	if connection.Reader != nil {
 		response.Reader = &MCPReaderResponse{State: string(connection.Reader.State), StateReason: connection.Reader.StateReason}
+	}
+	for i, token := range connection.CLITokens {
+		response.CLITokens[i] = MCPCLITokenResponseFromEntity(token)
 	}
 	for i, brain := range connection.VisibleBrains {
 		response.VisibleBrains[i] = MCPVisibleBrainResponse{
@@ -42,6 +67,16 @@ func MCPConnectionResponseFromInput(connection input_port.MCPConnection) MCPConn
 		}
 	}
 	return response
+}
+
+func MCPCLITokenResponseFromEntity(token entity.MCPToken) MCPCLITokenResponse {
+	label := ""
+	if token.Label != nil {
+		label = *token.Label
+	}
+	return MCPCLITokenResponse{
+		ID: token.ID, Label: label, ExpiresAt: token.ExpiresAt, CreatedAt: token.CreatedAt,
+	}
 }
 
 func MCPClientResponseFromEntity(client entity.MCPClient) MCPClientResponse {

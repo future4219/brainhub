@@ -15,8 +15,20 @@ export type MCPReader = {
   state_reason: string;
 };
 
+export type MCPCLIToken = {
+  id: string;
+  label: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type CreatedMCPCLIToken = MCPCLIToken & {
+  token: string;
+};
+
 export type MCPConnection = {
   client: MCPClient | null;
+  cli_tokens: MCPCLIToken[];
   visible_brains: MCPVisibleBrain[];
   reader: MCPReader | null;
 };

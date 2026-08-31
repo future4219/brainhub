@@ -35,13 +35,15 @@ type MCPTokenType string
 const (
 	MCPTokenAccess  MCPTokenType = "access"
 	MCPTokenRefresh MCPTokenType = "refresh"
+	MCPTokenCLI     MCPTokenType = "cli"
 )
 
 type MCPToken struct {
 	ID        string
 	Type      MCPTokenType
-	ClientID  string
+	ClientID  *string
 	UserID    string
+	Label     *string
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	RevokedAt *time.Time

@@ -267,6 +267,9 @@ Web編集用のsource固定confidential client。利用者へ渡す `IssuedClien
 - `MCPClient` はbrainhub OAuthのpublic client。Claude Webの完全一致redirect URIだけを持ち、secretは持たない。
 - authorization code、access token、refresh tokenは生値をDBへ保存せずSHA-256 hashだけを保存する。
 - access tokenは1時間、refresh tokenは30日。refreshの使用時は必ず新しいaccess/refresh pairへローテーションする。
+- `MCPToken(type=cli)` はCodexやClaude Code向けの利用者別Bearer token。OAuth clientには属さず、ラベルと利用者を持つ。生値は発行時だけ返し、DBにはSHA-256 hashだけを保存する。
+- CLI tokenは90日で期限切れになりrefreshしない。残り30日以内は接続画面で期限間近と示す。期限切れの `/mcp` 呼び出しは `401 token_expired` と再発行案内を返す。失効済みや未知のtokenは通常の401として扱う。
+- OAuth access tokenとCLI tokenの違いは利用者を特定する入口までである。その後は同じ `AuthorizeCall` を通り、現在のMembership、公開範囲、reader rescope、search拒否、fail-closedを共有する。
 - `ReaderClient` はbrainhubがGBrainへ接続する利用者別confidential client。secretはwriterと同じAES-GCMで暗号化する。
 - readerの `federated_read` はMCPリクエストごとに現在見られるsourceと照合する。差分があればGBrainの `rescope-client` 後にaccess tokenも取り直す。
 - rescopeまたはその永続化に失敗したら `orphan` にし、古いgrantでは一切転送しない。復旧は接続画面の手動再発行だけで行う。

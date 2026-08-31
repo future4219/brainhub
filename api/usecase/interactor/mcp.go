@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
@@ -20,6 +22,8 @@ const (
 	authorizationCodeTTL = 5 * time.Minute
 	mcpAccessTokenTTL    = time.Hour
 	mcpRefreshTokenTTL   = 30 * 24 * time.Hour
+	mcpCLITokenTTL       = 90 * 24 * time.Hour
+	mcpCLITokenLabelMax  = 64
 )
 
 type mcpUseCase struct {
@@ -50,6 +54,10 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 	if err != nil {
 		return connection, fmt.Errorf("list MCP-visible brains: %w", err)
 	}
+	connection.CLITokens, err = u.repository.ListMCPCLITokens(ctx, userID)
+	if err != nil {
+		return connection, fmt.Errorf("list MCP CLI tokens: %w", err)
+	}
 	reader, err := u.readers.FindReaderClientByUser(ctx, userID)
 	if err == nil {
 		connection.Reader = &reader
@@ -57,6 +65,32 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 		return connection, fmt.Errorf("find reader client: %w", err)
 	}
 	return connection, nil
+}
+
+func (u *mcpUseCase) IssueCLIToken(ctx context.Context, userID, label string) (input_port.IssuedCLIToken, error) {
+	label = strings.TrimSpace(label)
+	if label == "" || utf8.RuneCountInString(label) > mcpCLITokenLabelMax {
+		return input_port.IssuedCLIToken{}, input_port.ErrMCPInvalidTokenLabel
+	}
+	now := u.clock.Now()
+	token := entity.MCPToken{
+		ID: u.ids.New(), Type: entity.MCPTokenCLI, UserID: userID, Label: &label,
+		ExpiresAt: now.Add(mcpCLITokenTTL), CreatedAt: now,
+	}
+	raw, err := u.repository.CreateMCPCLIToken(ctx, token)
+	if err != nil {
+		return input_port.IssuedCLIToken{}, fmt.Errorf("create MCP CLI token: %w", err)
+	}
+	return input_port.IssuedCLIToken{Token: token, RawToken: raw}, nil
+}
+
+func (u *mcpUseCase) RevokeCLIToken(ctx context.Context, id, userID string) error {
+	if err := u.repository.RevokeMCPCLIToken(ctx, id, userID, u.clock.Now()); errors.Is(err, output_port.ErrNotFound) {
+		return input_port.ErrMCPTokenNotFound
+	} else if err != nil {
+		return fmt.Errorf("revoke MCP CLI token: %w", err)
+	}
+	return nil
 }
 
 func (u *mcpUseCase) IssueClient(ctx context.Context, userID string) (entity.MCPClient, error) {
@@ -164,6 +198,9 @@ func (u *mcpUseCase) RevokeToken(ctx context.Context, clientID, rawToken string)
 
 func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName string, requestedSource *string) (input_port.MCPCallAuthorization, error) {
 	token, err := u.repository.VerifyMCPAccessToken(ctx, rawToken, u.clock.Now())
+	if errors.Is(err, output_port.ErrTokenExpired) {
+		return input_port.MCPCallAuthorization{}, input_port.ErrMCPTokenExpired
+	}
 	if errors.Is(err, output_port.ErrNotFound) {
 		return input_port.MCPCallAuthorization{}, input_port.ErrMCPUnauthorized
 	}

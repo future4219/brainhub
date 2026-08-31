@@ -16,12 +16,13 @@ import (
 )
 
 type mcpRepositoryMock struct {
-	clients  map[string]entity.MCPClient
-	code     entity.MCPAuthorizationCode
-	rawCode  string
-	consumed bool
-	token    entity.MCPToken
-	visible  []entity.MCPVisibleBrain
+	clients   map[string]entity.MCPClient
+	code      entity.MCPAuthorizationCode
+	rawCode   string
+	consumed  bool
+	token     entity.MCPToken
+	cliTokens []entity.MCPToken
+	visible   []entity.MCPVisibleBrain
 }
 
 func newMCPRepositoryMock() *mcpRepositoryMock {
@@ -70,8 +71,37 @@ func (r *mcpRepositoryMock) ConsumeMCPAuthorizationCode(_ context.Context, raw, 
 }
 
 func (r *mcpRepositoryMock) CreateMCPTokenPair(_ context.Context, clientID, userID string, accessExpiry, _ time.Time) (string, string, error) {
-	r.token = entity.MCPToken{ID: "token-id", Type: entity.MCPTokenAccess, ClientID: clientID, UserID: userID, ExpiresAt: accessExpiry}
+	r.token = entity.MCPToken{ID: "token-id", Type: entity.MCPTokenAccess, ClientID: &clientID, UserID: userID, ExpiresAt: accessExpiry}
 	return "brainhub-access", "brainhub-refresh", nil
+}
+
+func (r *mcpRepositoryMock) CreateMCPCLIToken(_ context.Context, token entity.MCPToken) (string, error) {
+	r.token = token
+	r.cliTokens = append(r.cliTokens, token)
+	return "brainhub-cli", nil
+}
+
+func (r *mcpRepositoryMock) ListMCPCLITokens(_ context.Context, userID string) ([]entity.MCPToken, error) {
+	tokens := make([]entity.MCPToken, 0)
+	for _, token := range r.cliTokens {
+		if token.UserID == userID && token.RevokedAt == nil {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens, nil
+}
+
+func (r *mcpRepositoryMock) RevokeMCPCLIToken(_ context.Context, id, userID string, now time.Time) error {
+	for i := range r.cliTokens {
+		if r.cliTokens[i].ID == id && r.cliTokens[i].UserID == userID && r.cliTokens[i].RevokedAt == nil {
+			r.cliTokens[i].RevokedAt = &now
+			if r.token.ID == id {
+				r.token.RevokedAt = &now
+			}
+			return nil
+		}
+	}
+	return output_port.ErrNotFound
 }
 
 func (r *mcpRepositoryMock) RotateMCPRefreshToken(context.Context, string, string, time.Time, time.Time, time.Time) (entity.MCPToken, string, string, error) {
@@ -79,7 +109,11 @@ func (r *mcpRepositoryMock) RotateMCPRefreshToken(context.Context, string, strin
 }
 
 func (r *mcpRepositoryMock) VerifyMCPAccessToken(_ context.Context, raw string, now time.Time) (entity.MCPToken, error) {
-	if raw != "brainhub-access" || r.token.Type != entity.MCPTokenAccess || !now.Before(r.token.ExpiresAt) || r.token.RevokedAt != nil {
+	validRaw := raw == "brainhub-access" && r.token.Type == entity.MCPTokenAccess || raw == "brainhub-cli" && r.token.Type == entity.MCPTokenCLI
+	if validRaw && r.token.Type == entity.MCPTokenCLI && !now.Before(r.token.ExpiresAt) && r.token.RevokedAt == nil {
+		return entity.MCPToken{}, output_port.ErrTokenExpired
+	}
+	if !validRaw || !now.Before(r.token.ExpiresAt) || r.token.RevokedAt != nil {
 		return entity.MCPToken{}, output_port.ErrNotFound
 	}
 	return r.token, nil
@@ -164,6 +198,38 @@ func TestMCPOAuthPKCEIsOneTimeAndIssuesHashedRepositoryTokens(t *testing.T) {
 	}
 }
 
+func TestMCPCLITokenLifecycleUsesNinetyDayExpiry(t *testing.T) {
+	now := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	repository := newMCPRepositoryMock()
+	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	issued, err := useCase.IssueCLIToken(context.Background(), "user-1", "  codex  ")
+	if err != nil || issued.RawToken != "brainhub-cli" || issued.Token.Type != entity.MCPTokenCLI {
+		t.Fatalf("issued = %+v %v", issued, err)
+	}
+	if issued.Token.Label == nil || *issued.Token.Label != "codex" || !issued.Token.ExpiresAt.Equal(now.Add(90*24*time.Hour)) {
+		t.Fatalf("token metadata = %+v", issued.Token)
+	}
+	connection, err := useCase.Connection(context.Background(), "user-1")
+	if err != nil || len(connection.CLITokens) != 1 || connection.CLITokens[0].ID != issued.Token.ID {
+		t.Fatalf("connection tokens = %+v %v", connection.CLITokens, err)
+	}
+	if err := useCase.RevokeCLIToken(context.Background(), issued.Token.ID, "user-2"); !errors.Is(err, input_port.ErrMCPTokenNotFound) {
+		t.Fatalf("foreign revoke error = %v", err)
+	}
+	if err := useCase.RevokeCLIToken(context.Background(), issued.Token.ID, "user-1"); err != nil {
+		t.Fatal(err)
+	}
+	connection, _ = useCase.Connection(context.Background(), "user-1")
+	if len(connection.CLITokens) != 0 {
+		t.Fatalf("revoked tokens = %+v", connection.CLITokens)
+	}
+	for _, label := range []string{"   ", strings.Repeat("あ", 65)} {
+		if _, err := useCase.IssueCLIToken(context.Background(), "user-1", label); !errors.Is(err, input_port.ErrMCPInvalidTokenLabel) {
+			t.Fatalf("label %q error = %v", label, err)
+		}
+	}
+}
+
 func TestMCPOAuthRejectsNonASCIIAndNonS256PKCE(t *testing.T) {
 	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
@@ -210,6 +276,54 @@ func TestMCPAuthorizationUsesCurrentVisibilityAndRejectsForeignSourceBeforeGBrai
 	}
 	if len(reader.sources) != 2 || reader.sources[1] != "public-other" {
 		t.Fatalf("reader sources = %v", reader.sources)
+	}
+}
+
+func TestMCPCLITokenMatchesOAuthAuthorizationAndReflectsMembershipRevokeImmediately(t *testing.T) {
+	now := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	visible := []entity.MCPVisibleBrain{
+		{SourceID: "private-own", Role: "owner"},
+		{SourceID: "public-other", Role: "public"},
+	}
+	for _, tc := range []struct {
+		name  string
+		type_ entity.MCPTokenType
+		raw   string
+	}{
+		{name: "oauth", type_: entity.MCPTokenAccess, raw: "brainhub-access"},
+		{name: "cli", type_: entity.MCPTokenCLI, raw: "brainhub-cli"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repository := newMCPRepositoryMock()
+			repository.token = entity.MCPToken{Type: tc.type_, UserID: "user-1", ExpiresAt: now.Add(time.Hour)}
+			repository.visible = append([]entity.MCPVisibleBrain(nil), visible...)
+			reader := &brainReaderMock{}
+			useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+			authorized, err := useCase.AuthorizeCall(context.Background(), tc.raw, "list_pages", nil)
+			if err != nil || authorized.SourceID == nil || *authorized.SourceID != "__all__" || authorized.GBrainToken != "gbrain-reader-token" {
+				t.Fatalf("authorization = %+v %v", authorized, err)
+			}
+			if len(reader.sources) != 2 || reader.sources[0] != "private-own" || reader.sources[1] != "public-other" {
+				t.Fatalf("reader sources = %v", reader.sources)
+			}
+			if tc.type_ == entity.MCPTokenCLI {
+				repository.visible = visible[1:]
+				private := "private-own"
+				if _, err := useCase.AuthorizeCall(context.Background(), tc.raw, "list_pages", &private); !errors.Is(err, input_port.ErrMCPForbidden) {
+					t.Fatalf("revoked membership error = %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestMCPExpiredCLITokenHasSpecificUnauthorizedReason(t *testing.T) {
+	now := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	repository := newMCPRepositoryMock()
+	repository.token = entity.MCPToken{Type: entity.MCPTokenCLI, UserID: "user-1", ExpiresAt: now}
+	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-cli", "list_pages", nil); !errors.Is(err, input_port.ErrMCPTokenExpired) {
+		t.Fatalf("expired token error = %v", err)
 	}
 }
 

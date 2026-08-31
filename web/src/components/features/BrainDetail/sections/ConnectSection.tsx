@@ -5,24 +5,31 @@ import { copyLabel } from "@/components/features/BrainDetail/utils";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { Feedback } from "@/components/ui/Feedback";
+import { FormField } from "@/components/ui/FormField";
+import { Input } from "@/components/ui/Input";
 import { Panel } from "@/components/ui/Panel";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { StateBadge } from "@/components/ui/StateBadge";
 import { brainUrl, loginUrl } from "@/config/url";
-import { connectionSteps } from "@/lib/format";
+import { connectionSteps, formatDate } from "@/lib/format";
+
+const expiringSoonMilliseconds = 30 * 24 * 60 * 60 * 1000;
 
 export function ConnectSection(props: ConnectSectionProps) {
   const clientID = props.connection?.client?.id ?? null;
   const steps = props.config
     ? connectionSteps(props.config.mcp_url, clientID)
     : [];
+  const cliConfig = props.config
+    ? `[mcp_servers.brainhub]\nurl = "${props.config.mcp_url}"\nbearer_token_env_var = "BRAINHUB_MCP_TOKEN"`
+    : "";
 
   return (
     <div className="mt-6">
       <header className="mb-6">
         <h2 className="text-section font-semibold">あなたの接続</h2>
         <p className="mt-2 max-w-copy text-body leading-copy text-text-secondary">
-          この接続1本で、現在見られるすべての脳をClaudeから読み取れます。
+          この接続1本で、現在見られるすべての脳をAIクライアントから読み取れます。
           脳が増えても繋ぎ直す必要はありません。
         </p>
       </header>
@@ -117,6 +124,131 @@ export function ConnectSection(props: ConnectSectionProps) {
               <p className="border-t border-divider p-4 text-ui text-text-secondary">
                 Membershipや公開範囲の変更は、同じ接続の次の呼び出しから反映されます。
               </p>
+            </Panel>
+
+            <Panel>
+              <SectionHeading eyebrow="cli" title="CLI用トークン" />
+              <div className="border-b border-divider p-4 text-ui leading-prose text-text-secondary">
+                CodexやClaude Codeへ設定する90日間有効のBearer tokenです。自動更新はされません。
+                期限切れ後はMCPが401のtoken_expiredを返すため、新しいトークンを発行して環境変数を置き換えてください。
+              </div>
+              <form
+                className="flex flex-wrap items-end gap-3 border-b border-divider p-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  props.onIssueCLIToken();
+                }}
+              >
+                <FormField
+                  className="min-w-0 flex-1 basis-64 border-0 py-0"
+                  label="ラベル"
+                  hint="どこで使う鍵か分かる名前。例: codex"
+                >
+                  <Input
+                    value={props.cliTokenLabel}
+                    maxLength={64}
+                    placeholder="codex"
+                    required
+                    onChange={(event) =>
+                      props.onCLITokenLabel(event.target.value)
+                    }
+                  />
+                </FormField>
+                <Button
+                  type="submit"
+                  disabled={
+                    props.cliTokenSubmitting || !props.cliTokenLabel.trim()
+                  }
+                >
+                  {props.cliTokenSubmitting ? "発行中…" : "トークンを発行"}
+                </Button>
+              </form>
+              {props.createdCLIToken && (
+                <div className="border-b border-divider px-4">
+                  <CopyValue
+                    label="CLI TOKEN — 今だけ表示"
+                    value={props.createdCLIToken.token}
+                    note="再読み込みすると表示できません。見失った場合はこのトークンを失効し、新しく発行してください。"
+                    copyLabel={copyLabel(props.copyState["cli-token"])}
+                    onCopy={() =>
+                      props.onCopy("cli-token", props.createdCLIToken!.token)
+                    }
+                  />
+                </div>
+              )}
+              <div className="border-b border-divider p-4">
+                <p className="text-ui leading-prose text-text-secondary">
+                  トークンを環境変数
+                  <code className="mx-1 font-mono text-text-code">
+                    BRAINHUB_MCP_TOKEN
+                  </code>
+                  に保存し、Codexの設定へ次を追加します。
+                </p>
+                <div className="mt-3 flex overflow-hidden rounded-control border border-border-control bg-canvas">
+                  <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre p-3 font-mono text-sm leading-prose text-text-code">
+                    {cliConfig}
+                  </pre>
+                  <Button
+                    className="h-auto rounded-none border-0 border-l border-border-control"
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    onClick={() => props.onCopy("cli-config", cliConfig)}
+                  >
+                    {copyLabel(props.copyState["cli-config"])}
+                  </Button>
+                </div>
+              </div>
+              {props.cliTokenError && (
+                <Feedback kind="error">{props.cliTokenError}</Feedback>
+              )}
+              {props.connection.cli_tokens.length === 0 ? (
+                <Feedback kind="empty">
+                  CLI用トークンはまだありません。上のフォームから、使う端末ごとに発行してください。
+                </Feedback>
+              ) : (
+                <div>
+                  {props.connection.cli_tokens.map((token) => {
+                    const status = cliTokenStatus(token.expires_at);
+                    return (
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-4 border-b border-divider p-4 last:border-b-0"
+                        key={token.id}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-sm text-text">
+                            {token.label}
+                          </p>
+                          <p className="mt-1 font-mono text-xs text-text-muted">
+                            発行 {formatDate(token.created_at)} · 期限 {formatDate(token.expires_at)}
+                            {status.detail && ` · ${status.detail}`}
+                          </p>
+                        </div>
+                        <span className="state-badge" data-state={status.state}>
+                          [{status.label}]
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          disabled={props.cliTokenRevoking === token.id}
+                          onClick={() => props.onRevokeCLIToken(token.id)}
+                        >
+                          {props.cliTokenRevoking === token.id
+                            ? "失効中…"
+                            : "失効"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {(props.copyState["cli-token"] === "failed" ||
+                props.copyState["cli-config"] === "failed") && (
+                <Feedback kind="error">
+                  コピーできません。値を選択してコピーしてください。
+                </Feedback>
+              )}
             </Panel>
 
             <Panel>
@@ -247,6 +379,21 @@ export function ConnectSection(props: ConnectSectionProps) {
       )}
     </div>
   );
+}
+
+function cliTokenStatus(expiresAt: string) {
+  const remaining = new Date(expiresAt).getTime() - Date.now();
+  if (remaining <= 0) {
+    return { state: "expired", label: "期限切れ", detail: "再発行が必要" };
+  }
+  if (remaining <= expiringSoonMilliseconds) {
+    return {
+      state: "pending",
+      label: "期限間近",
+      detail: `あと${Math.ceil(remaining / (24 * 60 * 60 * 1000))}日`,
+    };
+  }
+  return { state: "active", label: "有効", detail: "" };
 }
 
 function roleLabel(role: string) {

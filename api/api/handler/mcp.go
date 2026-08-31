@@ -45,6 +45,40 @@ func (h *MCPHandler) IssueClient(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, schema.MCPClientResponseFromEntity(client))
 }
 
+func (h *MCPHandler) IssueCLIToken(w http.ResponseWriter, r *http.Request) {
+	var request schema.CreateMCPCLITokenRequest
+	if !decodeJSON(w, r, &request) {
+		return
+	}
+	current, _ := middleware.Current(r)
+	issued, err := h.useCase.IssueCLIToken(r.Context(), current.User.ID, request.Label)
+	if errors.Is(err, input_port.ErrMCPInvalidTokenLabel) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "label must be between 1 and 64 characters"})
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to issue MCP CLI token", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, schema.CreatedMCPCLITokenResponse{
+		MCPCLITokenResponse: schema.MCPCLITokenResponseFromEntity(issued.Token),
+		Token:               issued.RawToken,
+	})
+}
+
+func (h *MCPHandler) RevokeCLIToken(w http.ResponseWriter, r *http.Request) {
+	current, _ := middleware.Current(r)
+	if err := h.useCase.RevokeCLIToken(r.Context(), r.PathValue("id"), current.User.ID); errors.Is(err, input_port.ErrMCPTokenNotFound) {
+		http.Error(w, "CLI token not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "failed to revoke MCP CLI token", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *MCPHandler) ReissueReader(w http.ResponseWriter, r *http.Request) {
 	current, _ := middleware.Current(r)
 	if err := h.useCase.ReissueReader(r.Context(), current.User.ID); err != nil {
@@ -85,6 +119,9 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	authorization, err := h.useCase.AuthorizeCall(r.Context(), rawToken, toolName, requestedSource)
 	switch {
+	case errors.Is(err, input_port.ErrMCPTokenExpired):
+		h.expiredToken(w)
+		return
 	case errors.Is(err, input_port.ErrMCPUnauthorized):
 		h.unauthorized(w)
 		return
@@ -149,6 +186,14 @@ func bearerToken(header string) (string, bool) {
 func (h *MCPHandler) unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+h.resourceMetadataURL+`"`)
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
+}
+
+func (h *MCPHandler) expiredToken(w http.ResponseWriter) {
+	const description = "CLI token expired. Issue a new CLI token in brainhub connection settings and replace the configured bearer token."
+	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+h.resourceMetadataURL+`", error="invalid_token", error_description="`+description+`"`)
+	writeJSON(w, http.StatusUnauthorized, map[string]string{
+		"error": "token_expired", "error_description": description,
+	})
 }
 
 func writeMCPToolError(w http.ResponseWriter, id any, code, message string) {

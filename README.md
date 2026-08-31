@@ -181,7 +181,20 @@ docker compose exec gbrain gbrain sources harden brainhub --pat-file /var/lib/gb
 
 ### クライアントの接続
 
-脳の「接続」タブで利用者ごとのClaude Web Client IDを発行し、MCP URLと一緒にClaudeのカスタムコネクタへ設定する。public clientのためsecretはない。初回接続時はbrainhubの認可画面へログインし、現在見られる脳への読み取りを許可する。
+脳の「接続」タブでは、利用者ごとにブラウザ系とCLI系の2種類の接続情報を発行する。
+
+- Claude Webなどのブラウザ系にはOAuth Client IDを使う。public clientのためsecretはない。初回接続時はbrainhubの認可画面へログインし、現在見られる脳への読み取りを許可する。
+- CodexやClaude CodeなどのCLI系にはBearer tokenを使う。生tokenは発行時だけ表示され、DBにはSHA-256 hashだけを保存する。有効期限は90日でrefreshはなく、残り30日以内は接続画面で「期限間近」と表示する。期限切れ後は `401 token_expired` になるため、接続画面で新しいtokenを発行し、クライアントの環境変数を置き換える。
+
+Codexでは、発行した値を `BRAINHUB_MCP_TOKEN` などの環境変数へ置き、次のように設定する。
+
+```toml
+[mcp_servers.brainhub]
+url = "http://localhost:8080/mcp"
+bearer_token_env_var = "BRAINHUB_MCP_TOKEN"
+```
+
+CodexのOAuthも技術的には利用できる。Codexはグローバルの `mcp_oauth_callback_port` またはサーバーごとの `mcp_servers.<name>.oauth.callback_port` で固定callback portを設定できる。今回Bearer tokenを採用した理由はOAuthが不可能だからではなく、DCRを追加せず、固定callbackを事前登録しないCLIクライアントも同じ方式で接続できるようにするためである。将来DCRやCLI OAuthを検討するときは、Codexの公式MCP設定仕様を再確認すること: https://developers.openai.com/codex/mcp/
 
 接続は脳ごとではなく利用者ごとに1本である。各MCPリクエストで現在のMembershipと `public + ready` を読み直すため、所属や脳が増減しても接続し直さない。`list_skills` が件数を返せば、スキル（知識の引き方）も配信されている。
 
@@ -230,6 +243,8 @@ DELETE /api/clients/{id}                 旧issued clientを失効
 DELETE /api/brains/{sourceID}/members/{userID} ownerのみ。clientも連鎖失効
 GET  /api/mcp/connection                 利用者共通の接続情報と閲覧可能な脳
 POST /api/mcp/client                     Claude Web用Client IDを1人1件発行
+POST /api/mcp/tokens                     CLI用Bearer tokenを発行。生tokenはこの応答だけ
+DELETE /api/mcp/tokens/{id}              自分のCLI用Bearer tokenを失効
 POST /api/mcp/reader/reissue             orphanになったGBrain readerを手動再発行
 GET  /authorize                          brainhub OAuth認可開始
 POST /token                              認可コード交換・refresh tokenローテーション
