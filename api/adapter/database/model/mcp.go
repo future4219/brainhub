@@ -12,6 +12,7 @@ type MCPClient struct {
 }
 
 type MCPAuthorizationCode struct {
+	WriteAllowed  bool
 	ID            string
 	ClientID      string
 	UserID        string
@@ -24,14 +25,15 @@ type MCPAuthorizationCode struct {
 }
 
 type MCPToken struct {
-	ID        string
-	Type      string
-	ClientID  *string
-	UserID    string
-	Label     *string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	RevokedAt *time.Time
+	WriteAllowed bool
+	ID           string
+	Type         string
+	ClientID     *string
+	UserID       string
+	Label        *string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	RevokedAt    *time.Time
 }
 
 type ReaderClient struct {

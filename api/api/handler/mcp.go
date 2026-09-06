@@ -130,20 +130,24 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.unauthorized(w)
 		return
 	case errors.Is(err, input_port.ErrMCPForbidden):
-		writeMCPToolError(w, request["id"], "permission_denied", "The requested source is outside your current brainhub access scope.")
+		writeMCPToolError(w, request["id"], "permission_denied", "Writing requires write consent and an explicit source_id for a brain you can currently edit. The requested operation or source is not permitted.")
 		return
 	case err != nil:
-		http.Error(w, "MCP reader is unavailable; open brainhub connection settings and follow the recovery message", http.StatusServiceUnavailable)
+		http.Error(w, "MCP connection is unavailable; open brainhub connection settings and follow the recovery message", http.StatusServiceUnavailable)
 		return
 	}
-	if authorization.SourceID != nil {
+	if authorization.SourceID != nil || authorization.StripSource {
 		params, _ := request["params"].(map[string]any)
 		arguments, _ := params["arguments"].(map[string]any)
 		if arguments == nil {
 			arguments = make(map[string]any)
 			params["arguments"] = arguments
 		}
-		arguments["source_id"] = *authorization.SourceID
+		if authorization.StripSource {
+			delete(arguments, "source_id")
+		} else {
+			arguments["source_id"] = *authorization.SourceID
+		}
 		var marshalErr error
 		body, marshalErr = json.Marshal(request)
 		if marshalErr != nil {
@@ -151,12 +155,15 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if request["method"] == "tools/list" {
+		r = r.WithContext(input_port.WithMCPWritableSources(r.Context(), authorization.WritableSources))
+	}
 	if r.Method == http.MethodPost {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		r.ContentLength = int64(len(body))
 	}
-	// The caller's brainhub token is never valid at GBrain. Only the per-user
-	// reader token produced after current Membership reconciliation is forwarded.
+	// The caller's brainhub token is never valid at GBrain. Forward only the
+	// reader or source-bound writer authorized against current Membership.
 	r.Header.Set("Authorization", "Bearer "+authorization.GBrainToken)
 	h.proxy.ServeHTTP(w, r)
 }

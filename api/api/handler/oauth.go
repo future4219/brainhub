@@ -8,6 +8,7 @@ import (
 
 	"brainhub/api/middleware"
 	"brainhub/api/schema"
+	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
 )
 
@@ -43,7 +44,7 @@ func (h *OAuthHandler) AuthorizationServerMetadata(w http.ResponseWriter, _ *htt
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
 		"revocation_endpoint_auth_methods_supported":     []string{"none"},
-		"scopes_supported":                               []string{"read"},
+		"scopes_supported":                               []string{"read", "write"},
 		"authorization_response_iss_parameter_supported": true,
 	})
 }
@@ -53,7 +54,7 @@ func (h *OAuthHandler) ProtectedResourceMetadata(w http.ResponseWriter, _ *http.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":              h.mcpURL,
 		"authorization_servers": []string{h.issuer},
-		"scopes_supported":      []string{"read"},
+		"scopes_supported":      []string{"read", "write"},
 		"resource_name":         "brainhub MCP Server",
 	})
 }
@@ -91,6 +92,7 @@ func (h *OAuthHandler) Consent(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"client_name":    authorization.Client.Name,
+		"scope":          authorization.Input.Scope,
 		"client_id":      authorization.Client.ID,
 		"visible_brains": schema.MCPConnectionResponseFromInput(connection).VisibleBrains,
 	})
@@ -168,7 +170,7 @@ func (h *OAuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 		"token_type":    "Bearer",
 		"expires_in":    int64(pair.ExpiresIn.Seconds()),
 		"refresh_token": pair.RefreshToken,
-		"scope":         "read",
+		"scope":         entity.MCPScope(pair.WriteAllowed),
 	})
 }
 
@@ -210,6 +212,8 @@ func (h *OAuthHandler) authorizationError(w http.ResponseWriter, err error) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", "Unknown or revoked client.")
 	case errors.Is(err, input_port.ErrOAuthAccessDenied):
 		writeOAuthError(w, http.StatusForbidden, "access_denied", "This Client ID belongs to another brainhub user.")
+	case errors.Is(err, input_port.ErrOAuthInvalidScope):
+		writeOAuthError(w, http.StatusBadRequest, "invalid_scope", "Only read and write scopes are supported; consent cannot exceed the requested scope.")
 	case errors.Is(err, input_port.ErrOAuthInvalidRequest):
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "response_type, redirect_uri, resource, and PKCE S256 must match the registered client.")
 	default:
@@ -238,7 +242,7 @@ func (h *OAuthHandler) ProtectedResourceMetadataURL() string {
 
 func authorizationInput(value func(string) string) input_port.OAuthAuthorizationRequest {
 	return input_port.OAuthAuthorizationRequest{
-		ClientID: value("client_id"), RedirectURI: value("redirect_uri"), ResponseType: value("response_type"),
+		Scope: value("scope"), GrantedScope: value("granted_scope"), ClientID: value("client_id"), RedirectURI: value("redirect_uri"), ResponseType: value("response_type"),
 		CodeChallenge: value("code_challenge"), CodeChallengeMethod: value("code_challenge_method"), Resource: value("resource"),
 	}
 }

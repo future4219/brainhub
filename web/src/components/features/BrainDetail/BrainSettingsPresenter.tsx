@@ -15,9 +15,9 @@ export function BrainSettingsPresenter(props: {
   return (
     <BrainDetailLayout shell={props.shell} detail={props.detail}>
       <Panel className="mt-6 p-4">
-        <h2 className="text-body font-semibold">Web編集の接続を復旧</h2>
+        <h2 className="text-body font-semibold">脳への接続を復旧</h2>
         <p className="mt-2 text-ui text-text-secondary">
-          この脳のページをWebから保存できなくなった場合に、オーナーが編集用の接続を再発行できます。
+          この脳のページを表示・保存できなくなった場合に、オーナーが脳専用の接続を再発行できます。
         </p>
         {props.canReissueWriter ? (
           <Button
@@ -26,7 +26,7 @@ export function BrainSettingsPresenter(props: {
             disabled={props.writerReissuing}
             onClick={props.onReissueWriter}
           >
-            {props.writerReissuing ? "復旧中…" : "編集用の接続を再発行"}
+            {props.writerReissuing ? "復旧中…" : "脳専用の接続を再発行"}
           </Button>
         ) : (
           <p className="mt-4 text-ui text-text-muted">

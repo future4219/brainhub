@@ -151,7 +151,6 @@ type pagesMock struct {
 	getSourceID  entity.SourceID
 	pages        []entity.Page
 	details      []entity.PageDetail
-	puts         []entity.PageWrite
 }
 
 func (p *pagesMock) List(_ context.Context, brainID string, sourceID entity.SourceID) ([]entity.Page, error) {
@@ -161,7 +160,7 @@ func (p *pagesMock) List(_ context.Context, brainID string, sourceID entity.Sour
 	return p.pages, nil
 }
 
-func (p *pagesMock) GetEditable(_ context.Context, brainID string, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
+func (p *pagesMock) Get(_ context.Context, brainID string, sourceID entity.SourceID, slug string) (entity.PageDetail, error) {
 	p.called = true
 	p.getBrainID = brainID
 	p.getSourceID = sourceID
@@ -171,27 +170,6 @@ func (p *pagesMock) GetEditable(_ context.Context, brainID string, sourceID enti
 		}
 	}
 	return entity.PageDetail{}, output_port.ErrNotFound
-}
-
-func (p *pagesMock) ListTypes(context.Context, string, entity.SourceID) ([]entity.PageType, error) {
-	return []entity.PageType{{Name: "decision", Primitive: "concept"}}, nil
-}
-
-func (p *pagesMock) Put(_ context.Context, _ string, _ entity.SourceID, page entity.PageWrite) error {
-	p.puts = append(p.puts, page)
-	detail := entity.PageDetail{
-		Page:          entity.Page{Slug: page.Slug, Title: page.Title, Type: page.Type},
-		CompiledTruth: page.CompiledTruth, Timeline: page.Timeline, Tags: page.Tags,
-		SupersededBy: page.SupersededBy, Frontmatter: page.Frontmatter,
-	}
-	for i := range p.details {
-		if p.details[i].Slug == page.Slug {
-			p.details[i] = detail
-			return nil
-		}
-	}
-	p.details = append(p.details, detail)
-	return nil
 }
 
 func TestBrainCreateStateMachine(t *testing.T) {

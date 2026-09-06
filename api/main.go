@@ -94,7 +94,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, readerService, clock, ids, configuration.PublicMCPURL)
+	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, readerService, writerService, clock, ids, configuration.PublicMCPURL)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,3 +20,8 @@ type BrainWriter interface {
 	Provision(context.Context, string, entity.SourceID) error
 	Reissue(context.Context, string, entity.SourceID) error
 }
+
+// MCPWriter only issues tokens for an already authorized, source-bound write.
+type MCPWriter interface {
+	AccessToken(context.Context, string, entity.SourceID) (string, error)
+}

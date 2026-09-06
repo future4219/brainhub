@@ -8,8 +8,6 @@ export const appUrl = {
   createBrain: "/brains/new",
   brainDetail: "/brains/:sourceID",
   brainPage: "/brains/:sourceID/pages/*",
-  newPage: "/brains/:sourceID/page-editor/new",
-  editPage: "/brains/:sourceID/page-editor/edit/*",
   invitation: "/invite/:token",
   oauthAuthorize: "/oauth/authorize",
 } as const;
@@ -40,15 +38,6 @@ export function markdownPageHref(sourceID: string, href?: string): string | unde
   const suffixAt = href.search(/[?#]/);
   const slug = (suffixAt < 0 ? href : href.slice(0, suffixAt)).replace(/^\.\//, "");
   return pageUrl(sourceID, slug) + (suffixAt < 0 ? "" : href.slice(suffixAt));
-}
-
-export function newPageUrl(sourceID: string): string {
-  return `/brains/${encodeURIComponent(sourceID)}/page-editor/new`;
-}
-
-export function editPageUrl(sourceID: string, slug: string): string {
-  const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
-  return `/brains/${encodeURIComponent(sourceID)}/page-editor/edit/${encodedSlug}`;
 }
 
 export function loginUrl(next?: string): string {

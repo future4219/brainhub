@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	ErrOAuthInvalidScope    = errors.New("invalid OAuth scope")
 	ErrOAuthInvalidRequest  = errors.New("invalid OAuth request")
 	ErrOAuthInvalidClient   = errors.New("invalid OAuth client")
 	ErrOAuthInvalidGrant    = errors.New("invalid OAuth grant")
@@ -34,6 +35,8 @@ type IssuedCLIToken struct {
 }
 
 type OAuthAuthorizationRequest struct {
+	Scope               string
+	GrantedScope        string
 	ClientID            string
 	RedirectURI         string
 	ResponseType        string
@@ -48,14 +51,17 @@ type OAuthAuthorization struct {
 }
 
 type OAuthTokenPair struct {
+	WriteAllowed bool
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    time.Duration
 }
 
 type MCPCallAuthorization struct {
-	GBrainToken string
-	SourceID    *string
+	WritableSources []string
+	StripSource     bool
+	GBrainToken     string
+	SourceID        *string
 }
 
 type MCPUseCase interface {
@@ -71,4 +77,14 @@ type MCPUseCase interface {
 	AuthorizeCall(context.Context, string, string, *string) (MCPCallAuthorization, error)
 	ReissueReader(context.Context, string) error
 	ReconcileReaders(context.Context) error
+}
+
+type mcpCatalogContextKey struct{}
+
+func WithMCPWritableSources(ctx context.Context, sources []string) context.Context {
+	return context.WithValue(ctx, mcpCatalogContextKey{}, sources)
+}
+func MCPWritableSources(ctx context.Context) []string {
+	sources, _ := ctx.Value(mcpCatalogContextKey{}).([]string)
+	return sources
 }

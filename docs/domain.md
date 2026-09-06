@@ -254,7 +254,7 @@ const (
 
 ### BrainWriterClient
 
-Web編集用のsource固定confidential client。利用者へ渡す `IssuedClient` と違い、brainhub自身が脳ごとに1本を保持する。`client_secret_ciphertext` は `BRAINHUB_WRITER_CREDENTIAL_KEY` によるAES-GCM暗号文で、associated dataに `brain_id` と `gbrain_client_id` を使う。
+脳の閲覧とMCPページ書き込みに使うsource固定confidential client。利用者へ渡す `IssuedClient` と違い、brainhub自身が脳ごとに1本を保持する。`client_secret_ciphertext` は `BRAINHUB_WRITER_CREDENTIAL_KEY` によるAES-GCM暗号文で、associated dataに `brain_id` と `gbrain_client_id` を使う。
 
 `issued_clients.write_source_id` は流用しない。IssuedClientはUser/Membershipに従って失効しsecretを保存しないが、writerはBrainの作成・adoptから手動再発行まで独立したライフサイクルを持つためである。
 
@@ -438,6 +438,6 @@ type BrainReconciler interface {
 | 2. 公開ページ | `Page`, `Brain`, `SourceID` |
 | 3. ユーザーと所有 | `User`, `Membership`, `Role` |
 | 4. 招待 | `Invitation`, `IssuedClient`, 照合 |
-| 5. 編集画面 | `BrainWriterClient`, `PageWrite` |
+| 5. MCPページ作成・更新 | `BrainWriterClient`, `MCPToken` の書き込み許可 |
 
 フェーズ 2 で `Brain` を DB に持つ。公開ページには名前・説明・公開範囲が必要で、GBrain の source はそれらを持たないため。

@@ -38,11 +38,3 @@ export function postJSON<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
-
-export function putJSON<T>(path: string, body: unknown): Promise<T> {
-  return requestJSON(path, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}

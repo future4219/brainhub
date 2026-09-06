@@ -12,6 +12,7 @@ export function OAuthConsentContainer() {
   const [consent, setConsent] = useState<OAuthConsent | null>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [writeAllowed, setWriteAllowed] = useState(false);
 
   useEffect(() => {
     document.title = "接続を許可 — brainhub";
@@ -19,12 +20,16 @@ export function OAuthConsentContainer() {
 
   useEffect(() => {
     setConsent(null);
+    setWriteAllowed(false);
     if (!shell.viewer) return;
     let active = true;
     setError("");
     void getOAuthConsent(location.search)
       .then((value) => {
-        if (active) setConsent(value);
+        if (active) {
+          setConsent(value);
+          setWriteAllowed(value.scope === "read write");
+        }
       })
       .catch(() => {
         if (active)
@@ -41,7 +46,11 @@ export function OAuthConsentContainer() {
     setSubmitting(true);
     setError("");
     try {
-      const result = await decideOAuth(location.search, decision);
+      const result = await decideOAuth(
+        location.search,
+        decision,
+        writeAllowed ? "read write" : "read",
+      );
       window.location.assign(result.redirect_uri);
     } catch {
       setError(
@@ -55,6 +64,8 @@ export function OAuthConsentContainer() {
     <OAuthConsentPresenter
       {...shell}
       consent={consent}
+      writeAllowed={writeAllowed}
+      onWriteAllowed={setWriteAllowed}
       error={error}
       submitting={submitting}
       loginNext={`${location.pathname}${location.search}`}

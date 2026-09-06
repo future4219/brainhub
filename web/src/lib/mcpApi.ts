@@ -37,9 +37,11 @@ export function getOAuthConsent(search: string): Promise<OAuthConsent> {
 export function decideOAuth(
   search: string,
   decision: "approve" | "deny",
+  grantedScope: "read" | "read write",
 ): Promise<{ redirect_uri: string }> {
   const params = new URLSearchParams(search);
   params.set("decision", decision);
+  params.set("granted_scope", grantedScope);
   return requestJSON("/oauth/authorization", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

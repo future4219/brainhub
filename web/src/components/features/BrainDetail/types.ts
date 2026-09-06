@@ -15,7 +15,6 @@ export type BrainDetailState = {
 
 export type PagesSectionProps = {
   sourceID: string;
-  canWrite: boolean;
   pages: Page[] | null;
   error: string;
   typeCounts: [string, number][];

@@ -153,3 +153,11 @@ func (s *WriterService) credentialsFor(ctx context.Context, brainID string, sour
 	}
 	return *stored.GBrainClientID, secret, nil
 }
+
+func (s *WriterService) AccessToken(ctx context.Context, brainID string, sourceID entity.SourceID) (string, error) {
+	client, err := s.writerClient(ctx, brainID, sourceID)
+	if err != nil {
+		return "", err
+	}
+	return client.BearerToken(ctx)
+}

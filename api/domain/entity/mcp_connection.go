@@ -8,6 +8,7 @@ import (
 )
 
 type MCPVisibleBrain struct {
+	ID       string
 	SourceID SourceID
 	Name     string
 	State    string
@@ -46,6 +47,7 @@ func (c MCPClient) AllowsRedirectURI(raw string) bool {
 }
 
 type MCPAuthorizationCode struct {
+	WriteAllowed  bool
 	ID            string
 	ClientID      string
 	UserID        string
@@ -66,12 +68,24 @@ const (
 )
 
 type MCPToken struct {
-	ID        string
-	Type      MCPTokenType
-	ClientID  *string
-	UserID    string
-	Label     *string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	RevokedAt *time.Time
+	WriteAllowed bool
+	ID           string
+	Type         MCPTokenType
+	ClientID     *string
+	UserID       string
+	Label        *string
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	RevokedAt    *time.Time
+}
+
+func MCPScope(writeAllowed bool) string {
+	if writeAllowed {
+		return "read write"
+	}
+	return "read"
+}
+
+func (b MCPVisibleBrain) CanWrite() bool {
+	return b.State == "ready" && (b.Role == string(RoleOwner) || b.Role == string(RoleEditor))
 }

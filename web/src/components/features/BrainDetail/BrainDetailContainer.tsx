@@ -21,7 +21,6 @@ import { APIError } from "@/lib/api";
 import {
   getBrain,
   listPages,
-  listPageTypes,
   reissueWriter,
 } from "@/lib/brainApi";
 
@@ -34,7 +33,6 @@ export function BrainDetailContainer() {
   const [brainError, setBrainError] = useState<"not-found" | "load" | "">("");
   const [pages, setPages] = useState<Page[] | null>(null);
   const [pagesError, setPagesError] = useState("");
-  const [canWrite, setCanWrite] = useState(false);
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
   const [inviteAuthorized, setInviteAuthorized] = useState<boolean | null>(
     null,
@@ -76,17 +74,6 @@ export function BrainDetailContainer() {
         ),
       );
   }, [brain?.state, sourceID]);
-
-  useEffect(() => {
-    if (brain?.state !== "ready" || shell.viewer === undefined) return;
-    if (shell.viewer === null) {
-      setCanWrite(false);
-      return;
-    }
-    void listPageTypes(sourceID)
-      .then(() => setCanWrite(true))
-      .catch(() => setCanWrite(false));
-  }, [brain?.state, shell.viewer, sourceID]);
 
   useEffect(() => {
     if (
@@ -163,12 +150,11 @@ export function BrainDetailContainer() {
     setWriterStatus("");
     try {
       await reissueWriter(sourceID);
-      setWriterStatus("Writer client を再発行しました。ページを書き込めます。");
+      setWriterStatus("脳専用の接続を再発行しました。");
       setBrain(await getBrain(sourceID));
-      setCanWrite(true);
     } catch {
       setWriterStatus(
-        "Writer client を再発行できません。GBrain と暗号鍵の設定を確認してください。",
+        "接続を再発行できませんでした。時間をおいて再試行してください。",
       );
     } finally {
       setWriterReissuing(false);
@@ -232,7 +218,6 @@ export function BrainDetailContainer() {
         detail={detail}
         page={{
           sourceID,
-          canWrite,
           pages,
           error: pagesError,
           typeCounts,

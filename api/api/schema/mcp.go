@@ -13,6 +13,7 @@ type MCPClientResponse struct {
 }
 
 type MCPVisibleBrainResponse struct {
+	CanWrite bool   `json:"can_write"`
 	SourceID string `json:"source_id"`
 	Name     string `json:"name"`
 	State    string `json:"state"`
@@ -67,7 +68,7 @@ func MCPConnectionResponseFromInput(connection input_port.MCPConnection) MCPConn
 	}
 	for i, brain := range connection.VisibleBrains {
 		response.VisibleBrains[i] = MCPVisibleBrainResponse{
-			SourceID: brain.SourceID.String(), Name: brain.Name, State: brain.State, Role: brain.Role,
+			SourceID: brain.SourceID.String(), Name: brain.Name, State: brain.State, Role: brain.Role, CanWrite: brain.CanWrite(),
 		}
 	}
 	return response

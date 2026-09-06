@@ -10,6 +10,8 @@ import type { ViewerState } from "@/entities/user/entity";
 
 type OAuthConsentPresenterProps = ViewerState & {
   consent: OAuthConsent | null;
+  writeAllowed: boolean;
+  onWriteAllowed: (allowed: boolean) => void;
   error: string;
   submitting: boolean;
   loginNext: string;
@@ -19,6 +21,8 @@ type OAuthConsentPresenterProps = ViewerState & {
 
 export function OAuthConsentPresenter({
   consent,
+  writeAllowed,
+  onWriteAllowed,
   error,
   submitting,
   loginNext,
@@ -74,16 +78,54 @@ export function OAuthConsentPresenter({
                   <dt className="text-text-muted">許可する内容</dt>
                   <dd className="mt-1 text-text-secondary">
                     あなたが見られる脳の検索とページの読み取り。
-                    脳への参加・退出や公開範囲の変更は、この接続にも反映されます。
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-text-muted">書き込み</dt>
-                  <dd className="mt-1 text-text-secondary">
-                    この接続は読み取り専用です。ページの作成・変更はできません。
+                    脳への参加・退出や権限の変更は、この接続にも反映されます。
                   </dd>
                 </div>
               </dl>
+              <fieldset
+                className="mt-6 space-y-3 text-ui"
+                disabled={submitting}
+              >
+                <legend className="mb-2 font-semibold">接続の権限</legend>
+                <label className="flex items-start gap-3 rounded-control border border-border-control p-3">
+                  <input
+                    type="radio"
+                    name="access"
+                    className="mt-1"
+                    checked={writeAllowed}
+                    disabled={consent.scope !== "read write"}
+                    onChange={() => onWriteAllowed(true)}
+                  />
+                  <span>
+                    <span className="block font-semibold">
+                      読み取り・書き込み
+                    </span>
+                    <span className="mt-1 block text-text-secondary">
+                      編集権限のある脳で、ページの作成・更新を許可します。今後作る脳にも適用されます。
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-control border border-border-control p-3">
+                  <input
+                    type="radio"
+                    name="access"
+                    className="mt-1"
+                    checked={!writeAllowed}
+                    onChange={() => onWriteAllowed(false)}
+                  />
+                  <span>
+                    <span className="block font-semibold">読み取りのみ</span>
+                    <span className="mt-1 block text-text-secondary">
+                      検索と閲覧だけを許可します。
+                    </span>
+                  </span>
+                </label>
+                {consent.scope !== "read write" && (
+                  <p className="text-text-muted">
+                    接続元が読み取りのみを要求しています。書き込みも許可するには、接続元から読み取り・書き込みを要求して再認可してください。
+                  </p>
+                )}
+              </fieldset>
               <h2 className="mt-6 text-body font-semibold">現在読める脳</h2>
               {consent.visible_brains.length === 0 ? (
                 <p className="mt-2 text-ui text-text-muted">
@@ -97,13 +139,17 @@ export function OAuthConsentPresenter({
                       className="flex items-center justify-between gap-4 py-3 text-ui"
                     >
                       <div className="min-w-0">
-                        <p className="break-words font-semibold">{brain.name}</p>
+                        <p className="break-words font-semibold">
+                          {brain.name}
+                        </p>
                         <p className="mt-1 break-all font-mono text-xs text-text-muted">
                           {brain.source_id}
                         </p>
                       </div>
                       <span className="shrink-0 rounded-badge border border-border-control px-2 py-1 text-xs text-text-secondary">
-                        読み取り
+                        {writeAllowed && brain.can_write
+                          ? "読み書き"
+                          : "読み取り"}
                       </span>
                     </li>
                   ))}

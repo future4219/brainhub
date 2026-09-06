@@ -35,7 +35,7 @@ func TestCodexBrowserOAuthFlow(t *testing.T) {
 			repo := newMCPRepositoryMock()
 			repo.visible = []entity.MCPVisibleBrain{{SourceID: "my-brain", Name: "My brain", Role: "owner", State: "ready"}}
 			reader := &brainReaderMock{}
-			uc, err := interactor.NewMCPUseCase(repo, &readerRepositoryMock{}, reader, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
+			uc, err := interactor.NewMCPUseCase(repo, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
 			if err != nil {
 				t.Fatal(err)
 			}

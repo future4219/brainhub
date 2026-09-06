@@ -44,41 +44,6 @@ func (r *pageUseCase) Get(_ context.Context, sourceID entity.SourceID, slug, _ s
 	return entity.PageDetail{}, input_port.ErrPageNotFound
 }
 
-func (r *pageUseCase) ListTypes(_ context.Context, sourceID entity.SourceID, _ string) ([]entity.PageType, error) {
-	if sourceID != "brainhub" {
-		return nil, input_port.ErrBrainNotFound
-	}
-	return []entity.PageType{{Name: "decision", Primitive: "concept"}}, nil
-}
-
-func (r *pageUseCase) Create(_ context.Context, sourceID entity.SourceID, _ string, input input_port.CreatePageInput) (entity.PageDetail, error) {
-	if sourceID != "brainhub" {
-		return entity.PageDetail{}, input_port.ErrBrainNotFound
-	}
-	for _, page := range r.pages {
-		if page.Slug == input.Slug {
-			return entity.PageDetail{}, input_port.ErrPageAlreadyExists
-		}
-	}
-	page := entity.Page{Slug: input.Slug, Title: input.Title, Type: input.Type}
-	r.pages = append(r.pages, page)
-	return entity.PageDetail{Page: page, CompiledTruth: input.CompiledTruth, Timeline: input.TimelineEntry, Tags: input.Tags, SupersededBy: input.SupersededBy}, nil
-}
-
-func (r *pageUseCase) Update(_ context.Context, sourceID entity.SourceID, slug, _ string, input input_port.UpdatePageInput) (entity.PageDetail, error) {
-	if sourceID != "brainhub" {
-		return entity.PageDetail{}, input_port.ErrBrainNotFound
-	}
-	for i, page := range r.pages {
-		if page.Slug == slug {
-			page.Title, page.Type = input.Title, input.Type
-			r.pages[i] = page
-			return entity.PageDetail{Page: page, CompiledTruth: input.CompiledTruth, Timeline: input.TimelineEntry, Tags: input.Tags, SupersededBy: input.SupersededBy}, nil
-		}
-	}
-	return entity.PageDetail{}, input_port.ErrPageNotFound
-}
-
 type brainUseCase struct {
 	brains []entity.Brain
 }
@@ -539,35 +504,24 @@ func TestRoutes(t *testing.T) {
 		}
 	})
 
-	t.Run("page write routes", func(t *testing.T) {
-		request := func(method, path, body string) *http.Response {
-			req, _ := http.NewRequest(method, server.URL+path, bytes.NewBufferString(body))
-			req.Header.Set("Content-Type", "application/json")
-			req.AddCookie(sessionCookie)
-			response, err := http.DefaultClient.Do(req)
+	t.Run("retired Web page editing endpoints are unavailable", func(t *testing.T) {
+		for _, tc := range []struct {
+			method, path string
+			status       int
+		}{
+			{http.MethodGet, "/api/brains/brainhub/page-types", http.StatusNotFound},
+			{http.MethodPost, "/api/brains/brainhub/pages", http.StatusMethodNotAllowed},
+			{http.MethodPut, "/api/brains/brainhub/pages/notes/example", http.StatusMethodNotAllowed},
+		} {
+			request, _ := http.NewRequest(tc.method, server.URL+tc.path, strings.NewReader(`{}`))
+			request.AddCookie(sessionCookie)
+			response, err := http.DefaultClient.Do(request)
 			if err != nil {
 				t.Fatal(err)
 			}
-			return response
-		}
-		for _, test := range []struct {
-			method string
-			path   string
-			body   string
-			status int
-		}{
-			{http.MethodGet, "/api/brains/brainhub/page-types", "", http.StatusOK},
-			{http.MethodPost, "/api/brains/brainhub/pages", `{"slug":"notes/new","title":"New","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"truth","timeline_entry":"2026-08-17 initial"}`, http.StatusCreated},
-			{http.MethodPost, "/api/brains/brainhub/pages", `{"slug":"notes/new","title":"New","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"truth","timeline_entry":"2026-08-17 initial"}`, http.StatusConflict},
-			{http.MethodPut, "/api/brains/brainhub/pages/notes/new", `{"title":"Updated","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline_entry":"2026-08-17 changed"}`, http.StatusOK},
-			{http.MethodPut, "/api/brains/brainhub/pages/missing", `{"title":"Missing","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline_entry":""}`, http.StatusNotFound},
-			{http.MethodPut, "/api/brains/brainhub/pages/notes/new", `{"title":"Bad","type":"decision","tags":[],"superseded_by":null,"compiled_truth":"updated","timeline":"replace all","timeline_entry":""}`, http.StatusBadRequest},
-			{http.MethodPost, "/api/brains/brainhub/writer/reissue", "", http.StatusNoContent},
-		} {
-			response := request(test.method, test.path, test.body)
 			response.Body.Close()
-			if response.StatusCode != test.status {
-				t.Errorf("%s %s = %d; want %d", test.method, test.path, response.StatusCode, test.status)
+			if response.StatusCode != tc.status {
+				t.Errorf("%s %s = %d, want %d", tc.method, tc.path, response.StatusCode, tc.status)
 			}
 		}
 	})

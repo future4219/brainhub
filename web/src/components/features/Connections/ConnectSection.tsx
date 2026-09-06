@@ -34,7 +34,7 @@ export function ConnectSection(props: ConnectSectionProps) {
       <header className="mb-6">
         <h1 className="text-title font-semibold">AIとの接続</h1>
         <p className="mt-2 max-w-copy text-body leading-copy text-text-secondary">
-          BrainhubをAIに追加すると、あなたが見られる脳をまとめて読み取れます。
+          BrainhubをAIに追加すると、脳の検索・閲覧と、編集権限のある脳への保存ができます。
           脳が増えても繋ぎ直す必要はありません。
         </p>
       </header>
@@ -102,7 +102,7 @@ export function ConnectSection(props: ConnectSectionProps) {
               <ol className="list-decimal space-y-3 pl-5 text-body text-text-secondary">
                 <li>下のコマンドをCodexを使う端末で実行します。</li>
                 <li>
-                  開いたブラウザでBrainhubにログインし、読める脳を確認して許可します。
+                  開いたブラウザでBrainhubにログインし、読み取り・書き込みの権限を確認して許可します。
                 </li>
                 <li>
                   端末に接続完了が表示されたら、Codexで新しい会話を開いて使えます。
@@ -126,7 +126,7 @@ export function ConnectSection(props: ConnectSectionProps) {
                 </Button>
               )}
               <p className="mt-3 text-ui text-text-secondary">
-                接続後は「Brainhubで〇〇について調べて」と話しかけてください。現在は検索と読み取りに対応しています。
+                接続後は「Brainhubで〇〇について調べて」「〇〇の脳にこの内容を保存して」と話しかけてください。
               </p>
               <details className="mt-4 text-ui text-text-secondary">
                 <summary className="cursor-pointer">
@@ -135,7 +135,12 @@ export function ConnectSection(props: ConnectSectionProps) {
                 <p className="mt-2">
                   端末に表示された認証URLをブラウザで開いてください。やり直す場合は同じ端末で次を実行します。
                 </p>
-                <code className="mt-2 block">codex mcp login brainhub</code>
+                <code className="mt-2 block">
+                  codex mcp login brainhub --scopes read,write
+                </code>
+                <p className="mt-2">
+                  以前の接続は読み取り専用のままです。書き込みを使うには、再認可で「読み取り・書き込み」を選んで新しい会話を開いてください。
+                </p>
               </details>
               {props.copyState["codex-command"] === "failed" && (
                 <Feedback kind="error">
@@ -160,7 +165,10 @@ export function ConnectSection(props: ConnectSectionProps) {
                   <div className="min-w-0">
                     <p className="truncate text-body text-text">{brain.name}</p>
                     <p className="mt-1 text-xs text-text-muted">
-                      {brain.source_id} · {roleLabel(brain.role)} · 読み取り
+                      {brain.source_id} · {roleLabel(brain.role)} ·{" "}
+                      {brain.can_write
+                        ? "書き込み許可時に編集可能"
+                        : "読み取り"}
                     </p>
                   </div>
                   <StateBadge state={brain.state} />
@@ -179,7 +187,7 @@ export function ConnectSection(props: ConnectSectionProps) {
             <Panel>
               <SectionHeading eyebrow="cli" title="CLI用トークン" />
               <div className="border-b border-divider p-4 text-ui leading-prose text-text-secondary">
-                ブラウザ認証を使えない環境向けの接続用トークンです。有効期限は90日で、自動更新はされません。
+                ブラウザ認証を使えない環境向けの読み取り専用トークンです。有効期限は90日で、自動更新はされません。
                 期限切れ後はMCPが401のtoken_expiredを返すため、新しいトークンを発行して環境変数を置き換えてください。
               </div>
               <form
