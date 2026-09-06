@@ -125,9 +125,6 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, input_port.ErrMCPUnauthorized):
 		h.unauthorized(w)
 		return
-	case errors.Is(err, input_port.ErrMCPUnsupportedTool):
-		writeMCPToolError(w, request["id"], "unsupported_tool", "search is not available. Use query instead — it supports the same intent and respects your access scope.")
-		return
 	case errors.Is(err, input_port.ErrMCPForbidden):
 		writeMCPToolError(w, request["id"], "permission_denied", "The requested source is outside your current brainhub access scope.")
 		return

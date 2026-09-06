@@ -217,9 +217,6 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		sources[i] = brain.SourceID
 		allowed[brain.SourceID.String()] = struct{}{}
 	}
-	if toolName == "search" {
-		return input_port.MCPCallAuthorization{}, input_port.ErrMCPUnsupportedTool
-	}
 	var injected *string
 	if toolName == "query" || toolName == "list_pages" || toolName == "get_page" {
 		value := "__all__"

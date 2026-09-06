@@ -18,7 +18,6 @@ var (
 	ErrMCPInvalidTokenLabel = errors.New("invalid MCP CLI token label")
 	ErrMCPTokenNotFound     = errors.New("MCP CLI token not found")
 	ErrMCPForbidden         = errors.New("MCP source is not visible")
-	ErrMCPUnsupportedTool   = errors.New("MCP tool is not supported")
 )
 
 type MCPConnection struct {

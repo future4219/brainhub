@@ -50,6 +50,9 @@ func (s *mcpHandlerUseCaseStub) AuthorizeCall(_ context.Context, token, tool str
 	if s.error != nil {
 		return input_port.MCPCallAuthorization{}, s.error
 	}
+	if tool == "search" {
+		return input_port.MCPCallAuthorization{GBrainToken: "gbrain-reader-token"}, nil
+	}
 	source := "brain-a"
 	return input_port.MCPCallAuthorization{GBrainToken: "gbrain-reader-token", SourceID: &source}, nil
 }
@@ -92,15 +95,28 @@ func TestMCPHandlerInjectsSourceReplacesAuthorizationAndStreamsResponse(t *testi
 	}
 }
 
-func TestMCPHandlerRejectsSearchAsToolResultAndLegacyTokenAs401(t *testing.T) {
-	useCase := &mcpHandlerUseCaseStub{error: input_port.ErrMCPUnsupportedTool}
+func TestMCPHandlerProxiesSearchAndRejectsLegacyTokenAs401(t *testing.T) {
+	useCase := &mcpHandlerUseCaseStub{}
 	called := false
-	handler := NewMCPHandler(useCase, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }), "https://brainhub.example/.well-known/oauth-protected-resource/mcp")
+	handler := NewMCPHandler(useCase, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		called = true
+		var body struct {
+			Params struct {
+				Arguments map[string]any `json:"arguments"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := body.Params.Arguments["source_id"]; ok {
+			t.Fatal("search must rely on the reader grant, not inject source_id")
+		}
+	}), "https://brainhub.example/.well-known/oauth-protected-resource/mcp")
 	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"search","arguments":{"query":"secret"}}}`))
 	request.Header.Set("Authorization", "Bearer brainhub-token")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"isError":true`) || !strings.Contains(response.Body.String(), "Use query instead") || called {
+	if response.Code != http.StatusOK || !called || useCase.tool != "search" || useCase.requested != nil {
 		t.Fatalf("search response/called = %d %q %t", response.Code, response.Body.String(), called)
 	}
 

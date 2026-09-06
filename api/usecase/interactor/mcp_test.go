@@ -340,17 +340,26 @@ func TestMCPAuthorizationFailsClosedWhenReaderRescopeFails(t *testing.T) {
 	}
 }
 
-func TestMCPSearchIsRejectedWithoutCallingGBrain(t *testing.T) {
+func TestMCPSearchUsesCurrentVisibilityWithoutSourceInjection(t *testing.T) {
 	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
 	repository.token = entity.MCPToken{Type: entity.MCPTokenAccess, UserID: "user-1", ExpiresAt: now.Add(time.Hour)}
-	repository.visible = []entity.MCPVisibleBrain{{SourceID: "brain-a"}}
+	repository.visible = []entity.MCPVisibleBrain{{SourceID: "brain-a"}, {SourceID: "brain-b"}}
 	reader := &brainReaderMock{}
 	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
-	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil); !errors.Is(err, input_port.ErrMCPUnsupportedTool) {
-		t.Fatalf("search error = %v", err)
+	authorized, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil)
+	if err != nil || authorized.GBrainToken != "gbrain-reader-token" || authorized.SourceID != nil {
+		t.Fatalf("authorization = %+v %v", authorized, err)
 	}
-	if reader.calls != 0 {
-		t.Fatal("rejected search must not reach GBrain")
+	if reader.calls != 1 || len(reader.sources) != 2 || reader.sources[0] != "brain-a" || reader.sources[1] != "brain-b" {
+		t.Fatalf("reader calls/sources = %d %v", reader.calls, reader.sources)
+	}
+
+	repository.visible = repository.visible[:1]
+	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil); err != nil {
+		t.Fatal(err)
+	}
+	if reader.calls != 2 || len(reader.sources) != 1 || reader.sources[0] != "brain-a" {
+		t.Fatalf("reader calls/sources after revoke = %d %v", reader.calls, reader.sources)
 	}
 }
