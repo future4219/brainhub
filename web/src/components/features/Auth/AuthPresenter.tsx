@@ -59,7 +59,7 @@ export function AuthPresenter({
             {shell.viewer && (
               <Feedback kind="info">
                 {shell.viewer.name}
-                としてログイン中です。脳の一覧から続けてください。
+                としてログイン中です。元の画面に戻ります。
               </Feedback>
             )}
             {shell.viewer === null && (

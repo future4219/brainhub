@@ -27,6 +27,10 @@ export function AuthContainer({ mode }: { mode: AuthMode }) {
     document.title = `${isRegister ? "新規登録" : "ログイン"} — brainhub`;
   }, [isRegister]);
 
+  useEffect(() => {
+    if (shell.viewer) navigate(next, { replace: true });
+  }, [shell.viewer, next, navigate]);
+
   async function submit(input: {
     email: string;
     password: string;
