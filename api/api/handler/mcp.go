@@ -37,7 +37,11 @@ func (h *MCPHandler) Connection(w http.ResponseWriter, r *http.Request) {
 
 func (h *MCPHandler) IssueClient(w http.ResponseWriter, r *http.Request) {
 	current, _ := middleware.Current(r)
-	client, err := h.useCase.IssueClient(r.Context(), current.User.ID)
+	client, err := h.useCase.IssueClient(r.Context(), current.User.ID, r.PathValue("name"))
+	if errors.Is(err, input_port.ErrOAuthInvalidClient) {
+		http.Error(w, "unsupported MCP client", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, "failed to issue MCP client", http.StatusInternalServerError)
 		return

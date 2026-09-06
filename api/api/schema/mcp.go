@@ -42,6 +42,7 @@ type CreatedMCPCLITokenResponse struct {
 
 type MCPConnectionResponse struct {
 	Client        *MCPClientResponse        `json:"client"`
+	CodexClient   *MCPClientResponse        `json:"codex_client"`
 	CLITokens     []MCPCLITokenResponse     `json:"cli_tokens"`
 	VisibleBrains []MCPVisibleBrainResponse `json:"visible_brains"`
 	Reader        *MCPReaderResponse        `json:"reader"`
@@ -54,6 +55,9 @@ func MCPConnectionResponseFromInput(connection input_port.MCPConnection) MCPConn
 	}
 	if connection.Client != nil {
 		response.Client = &MCPClientResponse{ID: connection.Client.ID, Name: connection.Client.Name}
+	}
+	if connection.CodexClient != nil {
+		response.CodexClient = &MCPClientResponse{ID: connection.CodexClient.ID, Name: connection.CodexClient.Name}
 	}
 	if connection.Reader != nil {
 		response.Reader = &MCPReaderResponse{State: string(connection.Reader.State), StateReason: connection.Reader.StateReason}

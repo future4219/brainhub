@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"brainhub/api/middleware"
+	"brainhub/api/schema"
 	"brainhub/usecase/input_port"
 )
 
@@ -33,16 +34,17 @@ func NewOAuthHandler(useCase input_port.MCPUseCase, mcpURL, webURL string) (*OAu
 func (h *OAuthHandler) AuthorizationServerMetadata(w http.ResponseWriter, _ *http.Request) {
 	h.cors(w)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"issuer":                                     h.issuer,
-		"authorization_endpoint":                     h.issuer + "authorize",
-		"token_endpoint":                             h.issuer + "token",
-		"revocation_endpoint":                        h.issuer + "revoke",
-		"response_types_supported":                   []string{"code"},
-		"grant_types_supported":                      []string{"authorization_code", "refresh_token"},
-		"code_challenge_methods_supported":           []string{"S256"},
-		"token_endpoint_auth_methods_supported":      []string{"none"},
-		"revocation_endpoint_auth_methods_supported": []string{"none"},
-		"scopes_supported":                           []string{"read"},
+		"issuer":                                         h.issuer,
+		"authorization_endpoint":                         h.issuer + "authorize",
+		"token_endpoint":                                 h.issuer + "token",
+		"revocation_endpoint":                            h.issuer + "revoke",
+		"response_types_supported":                       []string{"code"},
+		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
+		"code_challenge_methods_supported":               []string{"S256"},
+		"token_endpoint_auth_methods_supported":          []string{"none"},
+		"revocation_endpoint_auth_methods_supported":     []string{"none"},
+		"scopes_supported":                               []string{"read"},
+		"authorization_response_iss_parameter_supported": true,
 	})
 }
 
@@ -82,9 +84,15 @@ func (h *OAuthHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		h.authorizationError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"client_name": authorization.Client.Name,
-		"client_id":   authorization.Client.ID,
+	connection, err := h.useCase.Connection(r.Context(), current.User.ID)
+	if err != nil {
+		http.Error(w, "failed to load access scope", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"client_name":    authorization.Client.Name,
+		"client_id":      authorization.Client.ID,
+		"visible_brains": schema.MCPConnectionResponseFromInput(connection).VisibleBrains,
 	})
 }
 
@@ -102,6 +110,7 @@ func (h *OAuthHandler) Decide(w http.ResponseWriter, r *http.Request) {
 	}
 	redirect, _ := url.Parse(authorization.Input.RedirectURI)
 	query := redirect.Query()
+	query.Set("iss", h.issuer)
 	if state := r.Form.Get("state"); state != "" {
 		query.Set("state", state)
 	}

@@ -28,6 +28,7 @@ export type CreatedMCPCLIToken = MCPCLIToken & {
 
 export type MCPConnection = {
   client: MCPClient | null;
+  codex_client: MCPClient | null;
   cli_tokens: MCPCLIToken[];
   visible_brains: MCPVisibleBrain[];
   reader: MCPReader | null;
@@ -36,4 +37,5 @@ export type MCPConnection = {
 export type OAuthConsent = {
   client_name: string;
   client_id: string;
+  visible_brains: MCPVisibleBrain[];
 };

@@ -22,7 +22,7 @@ type mcpHandlerUseCaseStub struct {
 func (s *mcpHandlerUseCaseStub) Connection(context.Context, string) (input_port.MCPConnection, error) {
 	return input_port.MCPConnection{}, nil
 }
-func (s *mcpHandlerUseCaseStub) IssueClient(context.Context, string) (entity.MCPClient, error) {
+func (s *mcpHandlerUseCaseStub) IssueClient(context.Context, string, string) (entity.MCPClient, error) {
 	return entity.MCPClient{}, nil
 }
 func (s *mcpHandlerUseCaseStub) IssueCLIToken(context.Context, string, string) (input_port.IssuedCLIToken, error) {

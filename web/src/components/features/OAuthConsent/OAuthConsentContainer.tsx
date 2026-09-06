@@ -18,15 +18,23 @@ export function OAuthConsentContainer() {
   }, []);
 
   useEffect(() => {
+    setConsent(null);
     if (!shell.viewer) return;
+    let active = true;
     setError("");
     void getOAuthConsent(location.search)
-      .then(setConsent)
-      .catch(() =>
-        setError(
-          "認可リクエストを確認できません。Client IDとredirect URIを確認してください。",
-        ),
-      );
+      .then((value) => {
+        if (active) setConsent(value);
+      })
+      .catch(() => {
+        if (active)
+          setError(
+            "接続の確認に失敗しました。AIとの接続画面からやり直してください。",
+          );
+      });
+    return () => {
+      active = false;
+    };
   }, [location.search, shell.viewer]);
 
   async function decide(decision: "approve" | "deny") {

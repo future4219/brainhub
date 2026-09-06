@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
-import type { ConnectSectionProps } from "@/components/features/BrainDetail/types";
-import { copyLabel } from "@/components/features/BrainDetail/utils";
+import type { ConnectSectionProps } from "@/components/features/Connections/types";
+import { copyLabel } from "@/lib/format";
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { Feedback } from "@/components/ui/Feedback";
@@ -10,12 +10,17 @@ import { Input } from "@/components/ui/Input";
 import { Panel } from "@/components/ui/Panel";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { StateBadge } from "@/components/ui/StateBadge";
-import { brainUrl, loginUrl } from "@/config/url";
-import { connectionSteps, formatDate } from "@/lib/format";
+import { appUrl, loginUrl } from "@/config/url";
+import { codexConnectCommand, connectionSteps, formatDate } from "@/lib/format";
 
 const expiringSoonMilliseconds = 30 * 24 * 60 * 60 * 1000;
 
 export function ConnectSection(props: ConnectSectionProps) {
+  const codexClient = props.connection?.codex_client;
+  const codexCommand =
+    props.config && codexClient
+      ? codexConnectCommand(props.config.mcp_url, codexClient.id)
+      : "";
   const clientID = props.connection?.client?.id ?? null;
   const steps = props.config
     ? connectionSteps(props.config.mcp_url, clientID)
@@ -27,109 +32,154 @@ export function ConnectSection(props: ConnectSectionProps) {
   return (
     <div className="mt-6">
       <header className="mb-6">
-        <h2 className="text-section font-semibold">あなたの接続</h2>
+        <h1 className="text-title font-semibold">AIとの接続</h1>
         <p className="mt-2 max-w-copy text-body leading-copy text-text-secondary">
-          この接続1本で、現在見られるすべての脳をAIクライアントから読み取れます。
+          BrainhubをAIに追加すると、あなたが見られる脳をまとめて読み取れます。
           脳が増えても繋ぎ直す必要はありません。
         </p>
       </header>
 
-      <Panel className="mb-6 border-border-strong bg-surface p-4">
-        <h3 className="text-body font-semibold">新しい接続情報に切り替えてください</h3>
-        <p className="mt-2 text-ui leading-prose text-text-secondary">
-          以前の脳ごとのClient IDはこのMCP URLでは利用できません。
-          下のMCP URLと新しいClient IDでClaudeのコネクタを更新してください。
-        </p>
-      </Panel>
-
       {props.error && <Feedback kind="error">{props.error}</Feedback>}
-      {!props.config && !props.error && (
-        <Feedback kind="loading">loading connection…</Feedback>
+      {props.viewer === undefined && (
+        <Feedback kind="loading">ログイン状態を確認中…</Feedback>
       )}
-      {props.config && !props.viewer && (
+      {!props.config && !props.error && (
+        <Feedback kind="loading">接続情報を読み込み中…</Feedback>
+      )}
+      {props.config && props.viewer === null && (
         <Panel className="p-4">
           <p className="text-ui text-text-secondary">
             接続情報を作るにはログインしてください。
           </p>
           <Link
             className={`${buttonVariants({ size: "sm" })} mt-4`}
-            to={loginUrl(brainUrl(props.sourceID, "connect"))}
+            to={loginUrl(appUrl.connections)}
           >
             ログイン
           </Link>
         </Panel>
       )}
       {props.config && props.viewer && !props.connection && !props.error && (
-        <Feedback kind="loading">loading your connection…</Feedback>
+        <Feedback kind="loading">接続情報を読み込み中…</Feedback>
       )}
       {props.config && props.viewer && props.connection && (
-        <div className="flex flex-col items-start gap-6 lg:flex-row">
-          <div className="min-w-0 flex-1 space-y-6">
-            {props.connection.reader?.state === "orphan" && (
-              <Panel className="p-4">
-                <StateBadge state="orphan" />
-                <h3 className="mt-3 text-body font-semibold">
-                  読み取り接続を再発行してください
-                </h3>
-                <p className="mt-2 text-ui leading-prose text-text-secondary">
-                  GBrainのreader作成または範囲更新に失敗したため、現在のリクエストは転送されません。
-                  再発行後にClaudeからもう一度呼び出してください。
+        <div className="max-w-copy space-y-6">
+          {props.connection.reader?.state === "orphan" && (
+            <Panel className="p-4">
+              <StateBadge state="orphan" />
+              <h3 className="mt-3 text-body font-semibold">
+                読み取り接続を再発行してください
+              </h3>
+              <p className="mt-2 text-ui leading-prose text-text-secondary">
+                GBrainのreader作成または範囲更新に失敗したため、現在のリクエストは転送されません。
+                再発行後にAIからもう一度呼び出してください。
+              </p>
+              {props.connection.reader.state_reason && (
+                <p className="mt-3 break-words font-mono text-xs text-text-muted">
+                  {props.connection.reader.state_reason}
                 </p>
-                {props.connection.reader.state_reason && (
-                  <p className="mt-3 break-words font-mono text-xs text-text-muted">
-                    {props.connection.reader.state_reason}
-                  </p>
-                )}
+              )}
+              <Button
+                className="mt-4"
+                size="sm"
+                type="button"
+                disabled={props.readerReissuing}
+                onClick={props.onReissueReader}
+              >
+                {props.readerReissuing ? "再発行中…" : "読み取り接続を再発行"}
+              </Button>
+              {props.readerStatus && (
+                <p className="mt-3 text-xs text-text-secondary">
+                  {props.readerStatus}
+                </p>
+              )}
+            </Panel>
+          )}
+
+          <Panel>
+            <SectionHeading eyebrow="codex" title="CodexにBrainhubを追加" />
+            <div className="p-4">
+              <ol className="list-decimal space-y-3 pl-5 text-body text-text-secondary">
+                <li>下のコマンドをCodexを使う端末で実行します。</li>
+                <li>
+                  開いたブラウザでBrainhubにログインし、読める脳を確認して許可します。
+                </li>
+                <li>
+                  端末に接続完了が表示されたら、Codexで新しい会話を開いて使えます。
+                </li>
+              </ol>
+              {codexClient ? (
+                <CopyValue
+                  label="Codexへ追加するコマンド"
+                  value={codexCommand}
+                  copyLabel={copyLabel(props.copyState["codex-command"])}
+                  onCopy={() => props.onCopy("codex-command", codexCommand)}
+                />
+              ) : (
                 <Button
                   className="mt-4"
-                  size="sm"
                   type="button"
-                  disabled={props.readerReissuing}
-                  onClick={props.onReissueReader}
+                  disabled={props.submitting}
+                  onClick={() => props.onIssue("codex")}
                 >
-                  {props.readerReissuing ? "再発行中…" : "読み取り接続を再発行"}
+                  {props.submitting ? "準備中…" : "Codexの接続を準備"}
                 </Button>
-                {props.readerStatus && (
-                  <p className="mt-3 text-xs text-text-secondary">
-                    {props.readerStatus}
-                  </p>
-                )}
-              </Panel>
-            )}
-
-            <Panel>
-              <SectionHeading eyebrow="access" title="見られる脳" />
-              {props.connection.visible_brains.length === 0 ? (
-                <Feedback kind="empty">
-                  接続できるreadyの脳がありません。脳を作るか、招待を受けてください。
-                </Feedback>
-              ) : (
-                props.connection.visible_brains.map((brain) => (
-                  <div
-                    className="flex items-center justify-between gap-4 border-b border-divider p-4 last:border-b-0"
-                    key={brain.source_id}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-mono text-sm text-text">
-                        {brain.source_id}
-                      </p>
-                      <p className="mt-1 text-xs text-text-muted">
-                        {roleLabel(brain.role)}
-                      </p>
-                    </div>
-                    <StateBadge state={brain.state} />
-                  </div>
-                ))
               )}
-              <p className="border-t border-divider p-4 text-ui text-text-secondary">
-                Membershipや公開範囲の変更は、同じ接続の次の呼び出しから反映されます。
+              <p className="mt-3 text-ui text-text-secondary">
+                接続後は「Brainhubで〇〇について調べて」と話しかけてください。現在は検索と読み取りに対応しています。
               </p>
-            </Panel>
+              <details className="mt-4 text-ui text-text-secondary">
+                <summary className="cursor-pointer">
+                  ブラウザが開かない・認証をやり直す
+                </summary>
+                <p className="mt-2">
+                  端末に表示された認証URLをブラウザで開いてください。やり直す場合は同じ端末で次を実行します。
+                </p>
+                <code className="mt-2 block">codex mcp login brainhub</code>
+              </details>
+              {props.copyState["codex-command"] === "failed" && (
+                <Feedback kind="error">
+                  コピーできません。コマンドを選択してコピーしてください。
+                </Feedback>
+              )}
+            </div>
+          </Panel>
 
+          <Panel>
+            <SectionHeading eyebrow="access" title="見られる脳" />
+            {props.connection.visible_brains.length === 0 ? (
+              <Feedback kind="empty">
+                現在読める脳はありません。脳を作るか、招待を受けると利用できます。
+              </Feedback>
+            ) : (
+              props.connection.visible_brains.map((brain) => (
+                <div
+                  className="flex items-center justify-between gap-4 border-b border-divider p-4 last:border-b-0"
+                  key={brain.source_id}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-body text-text">{brain.name}</p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {brain.source_id} · {roleLabel(brain.role)} · 読み取り
+                    </p>
+                  </div>
+                  <StateBadge state={brain.state} />
+                </div>
+              ))
+            )}
+            <p className="border-t border-divider p-4 text-ui text-text-secondary">
+              脳への参加・退出や公開範囲の変更は、次の呼び出しから反映されます。
+            </p>
+          </Panel>
+
+          <details>
+            <summary className="cursor-pointer py-3 text-body font-semibold">
+              手動トークンで接続する
+            </summary>
             <Panel>
               <SectionHeading eyebrow="cli" title="CLI用トークン" />
               <div className="border-b border-divider p-4 text-ui leading-prose text-text-secondary">
-                CodexやClaude Codeへ設定する90日間有効のBearer tokenです。自動更新はされません。
+                ブラウザ認証を使えない環境向けの接続用トークンです。有効期限は90日で、自動更新はされません。
                 期限切れ後はMCPが401のtoken_expiredを返すため、新しいトークンを発行して環境変数を置き換えてください。
               </div>
               <form
@@ -220,7 +270,8 @@ export function ConnectSection(props: ConnectSectionProps) {
                             {token.label}
                           </p>
                           <p className="mt-1 font-mono text-xs text-text-muted">
-                            発行 {formatDate(token.created_at)} · 期限 {formatDate(token.expires_at)}
+                            発行 {formatDate(token.created_at)} · 期限{" "}
+                            {formatDate(token.expires_at)}
                             {status.detail && ` · ${status.detail}`}
                           </p>
                         </div>
@@ -250,11 +301,48 @@ export function ConnectSection(props: ConnectSectionProps) {
                 </Feedback>
               )}
             </Panel>
-
+          </details>
+          <details>
+            <summary className="cursor-pointer py-3 text-body font-semibold">
+              Claude Webに接続する
+            </summary>
             <Panel>
               <SectionHeading eyebrow="claude web" title="接続手順" />
+              <div className="px-4">
+                <CopyValue
+                  label="MCP URL"
+                  value={props.config.mcp_url}
+                  copyLabel={copyLabel(props.copyState.mcp)}
+                  onCopy={() => props.onCopy("mcp", props.config!.mcp_url)}
+                />
+                {clientID ? (
+                  <CopyValue
+                    label="OAuth Client ID"
+                    value={clientID}
+                    copyLabel={copyLabel(props.copyState.client)}
+                    onCopy={() => props.onCopy("client", clientID)}
+                  />
+                ) : (
+                  <Button
+                    className="my-4"
+                    type="button"
+                    disabled={props.submitting}
+                    onClick={() => props.onIssue("claude-web")}
+                  >
+                    Claude Webの接続を準備
+                  </Button>
+                )}
+                {(props.copyState.mcp === "failed" ||
+                  props.copyState.client === "failed") && (
+                  <Feedback kind="error">
+                    コピーできません。値を選択してコピーしてください。
+                  </Feedback>
+                )}
+              </div>
               <div className="border-b border-divider p-4 text-ui leading-prose text-text-secondary">
-                Dynamic Client Registrationには対応していません。最初の失敗後にClient IDを手入力します。
+                Dynamic Client
+                Registrationには対応していません。最初の失敗後にClient
+                IDを手入力します。
               </div>
               <ol>
                 {steps.map((step, index) => (
@@ -298,83 +386,7 @@ export function ConnectSection(props: ConnectSectionProps) {
                 ))}
               </ol>
             </Panel>
-          </div>
-
-          <aside className="w-full shrink-0 space-y-4 lg:sticky lg:top-sticky lg:max-w-credentials">
-            <Panel>
-              <SectionHeading
-                eyebrow="credentials"
-                title="接続情報"
-                meta={
-                  !clientID ? (
-                    <Button
-                      size="sm"
-                      type="button"
-                      disabled={props.submitting}
-                      onClick={props.onIssue}
-                    >
-                      {props.submitting ? "発行中…" : "Client IDを発行"}
-                    </Button>
-                  ) : undefined
-                }
-              />
-              <div className="px-4">
-                <CopyValue
-                  label="MCP URL"
-                  value={props.config.mcp_url}
-                  note="/api/configが返した公開URL。"
-                  copyLabel={copyLabel(props.copyState.mcp)}
-                  onCopy={() => props.onCopy("mcp", props.config!.mcp_url)}
-                />
-                {clientID && (
-                  <CopyValue
-                    label="OAuth Client ID"
-                    value={clientID}
-                    note="Claude Web用のpublic client。"
-                    copyLabel={copyLabel(props.copyState.client)}
-                    onCopy={() => props.onCopy("client", clientID)}
-                  />
-                )}
-                <div className="border-t border-divider py-4">
-                  <p className="font-mono text-xs uppercase tracking-label text-text-muted">
-                    Secret
-                  </p>
-                  <p className="mt-2 font-mono text-sm text-text">なし</p>
-                </div>
-              </div>
-            </Panel>
-
-            {props.canReissueWriter && (
-              <Panel className="p-4">
-                <h3 className="text-body font-semibold">Web書き込み用client</h3>
-                <p className="mt-2 text-ui leading-prose text-text-secondary">
-                  この脳のwriterがorphanの場合に再発行します。Claudeの読み取り接続とは別です。
-                </p>
-                <Button
-                  className="mt-4"
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  disabled={props.writerReissuing}
-                  onClick={props.onReissueWriter}
-                >
-                  {props.writerReissuing ? "再発行中…" : "Writer clientを再発行"}
-                </Button>
-                {props.writerStatus && (
-                  <p className="mt-3 text-xs leading-prose text-text-secondary">
-                    {props.writerStatus}
-                  </p>
-                )}
-              </Panel>
-            )}
-
-            {(props.copyState.mcp === "failed" ||
-              props.copyState.client === "failed") && (
-              <Feedback kind="error">
-                コピーできません。値を選択してコピーしてください。
-              </Feedback>
-            )}
-          </aside>
+          </details>
         </div>
       )}
     </div>

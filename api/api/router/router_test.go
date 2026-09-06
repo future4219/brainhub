@@ -151,7 +151,7 @@ func (u *mcpUseCase) Connection(context.Context, string) (input_port.MCPConnecti
 	return input_port.MCPConnection{}, nil
 }
 
-func (u *mcpUseCase) IssueClient(_ context.Context, userID string) (entity.MCPClient, error) {
+func (u *mcpUseCase) IssueClient(_ context.Context, userID, name string) (entity.MCPClient, error) {
 	return entity.MCPClient{ID: "mcp-client", UserID: userID, Name: "claude-web"}, nil
 }
 

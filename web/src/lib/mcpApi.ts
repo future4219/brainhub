@@ -10,8 +10,10 @@ export function getMCPConnection(): Promise<MCPConnection> {
   return requestJSON("/mcp/connection");
 }
 
-export function issueMCPClient(): Promise<MCPClient> {
-  return postJSON("/mcp/client");
+export function issueMCPClient(
+  name: "claude-web" | "codex",
+): Promise<MCPClient> {
+  return postJSON(`/mcp/clients/${name}`);
 }
 
 export function issueMCPCLIToken(label: string): Promise<CreatedMCPCLIToken> {

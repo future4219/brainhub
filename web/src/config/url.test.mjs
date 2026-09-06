@@ -14,7 +14,7 @@ import {
   createBrainFailure,
   sourceIDCandidate,
 } from "../components/features/CreateBrain/createBrainForm.ts";
-import { connectionSteps, formatDate, pageSignature } from "../lib/format.ts";
+import { codexConnectCommand, connectionSteps, formatDate, pageSignature } from "../lib/format.ts";
 import { safeNextPath } from "../lib/security.ts";
 
 assert.equal(brainTab("?tab=invites"), "invites");
@@ -40,7 +40,7 @@ assert.deepEqual(
   },
 );
 assert.equal(brainTab("?connect=1"), "connect");
-assert.equal(brainUrl("brainhub", "connect"), "/brains/brainhub?tab=connect");
+assert.equal(brainUrl("brainhub", "connect"), "/settings/connections");
 assert.equal(invitationUrl("a/b"), "/invite/a%2Fb");
 assert.equal(pageUrl("brainhub", "decisions/a b"), "/brains/brainhub/pages/decisions/a%20b");
 assert.equal(markdownPageHref("eval", "people/tomoko-sato"), "/brains/eval/pages/people/tomoko-sato");
@@ -55,3 +55,24 @@ assert.equal(pageSignature(["idea", "decision", "idea", "note", "research"]), "i
 assert.equal(formatDate("2026-08-14T15:23:56.326Z"), "2026-08-14");
 assert.equal(connectionSteps("https://example.test/mcp", "client-id").length, 5);
 assert.match(connectionSteps("https://example.test/mcp", null)[1].code, /https:\/\/example\.test\/mcp/);
+
+assert.equal(brainTab("?tab=settings"), "settings");
+assert.equal(brainUrl("brainhub", "settings"), "/brains/brainhub?tab=settings");
+assert.equal(
+  codexConnectCommand("https://example.test/mcp", "client-id"),
+  "codex mcp add brainhub --url 'https://example.test/mcp' --oauth-client-id 'client-id'",
+);
+
+// Custom font sizes must not replace text colors on buttons and feedback.
+const { cn } = await import("../lib/utils.ts");
+for (const size of ["ui", "body", "section", "title"]) {
+  assert.equal(cn("text-canvas", `text-${size}`), `text-canvas text-${size}`);
+  assert.equal(
+    cn(`text-${size}`, "text-text-muted"),
+    `text-${size} text-text-muted`,
+  );
+  assert.equal(
+    cn("text-canvas", `text-${size}`, "text-sm"),
+    "text-canvas text-sm",
+  );
+}

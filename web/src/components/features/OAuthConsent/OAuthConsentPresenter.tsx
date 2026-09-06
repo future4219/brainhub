@@ -65,13 +65,16 @@ export function OAuthConsentPresenter({
                 <div>
                   <dt className="text-text-muted">クライアント</dt>
                   <dd className="mt-1 font-mono text-text">
-                    {consent.client_name}
+                    {consent.client_name === "codex"
+                      ? "Codex"
+                      : consent.client_name}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-text-muted">許可する内容</dt>
                   <dd className="mt-1 text-text-secondary">
-                    現在あなたが見られる脳の読み取り。Membershipや公開範囲の変更は次の呼び出しから反映されます。
+                    あなたが見られる脳の検索とページの読み取り。
+                    脳への参加・退出や公開範囲の変更は、この接続にも反映されます。
                   </dd>
                 </div>
                 <div>
@@ -79,12 +82,29 @@ export function OAuthConsentPresenter({
                   <dd className="mt-1 text-text">許可しない</dd>
                 </div>
               </dl>
+              <h2 className="mt-6 text-body font-semibold">現在読める脳</h2>
+              {consent.visible_brains.length === 0 ? (
+                <p className="mt-2 text-ui text-text-muted">
+                  現在読める脳はありません。脳を作るか招待を受けると、この接続から利用できます。
+                </p>
+              ) : (
+                <ul className="mt-2 divide-y divide-divider">
+                  {consent.visible_brains.map((brain) => (
+                    <li key={brain.source_id} className="py-3 text-ui">
+                      <span className="font-semibold">{brain.name}</span>
+                      <span className="ml-2 font-mono text-xs text-text-muted">
+                        {brain.source_id}
+                      </span>
+                      <span className="ml-2 text-text-secondary">読み取り</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-4 text-ui text-text-secondary">
+                許可すると接続元のAIに戻ります。
+              </p>
               <div className="mt-6 flex gap-2">
-                <Button
-                  type="button"
-                  disabled={submitting}
-                  onClick={onApprove}
-                >
+                <Button type="button" disabled={submitting} onClick={onApprove}>
                   {submitting ? "処理中…" : "許可する"}
                 </Button>
                 <Button

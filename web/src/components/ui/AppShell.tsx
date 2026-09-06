@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { Button, buttonVariants } from "@/components/ui/Button";
 import { appUrl, brainUrl } from "@/config/url";
@@ -15,6 +15,7 @@ type AppShellProps = ViewerState & {
 
 export function AppShell({ viewer, brains, sessionUnavailable, crumbs, search, onLogout, children }: AppShellProps) {
   const { sourceID } = useParams<{ sourceID: string }>();
+  const location = useLocation();
   const sidebarBrains = brains ?? [];
 
   return (
@@ -25,10 +26,13 @@ export function AppShell({ viewer, brains, sessionUnavailable, crumbs, search, o
           brainhub
         </Link>
         <nav className="px-2 py-1" aria-label="メイン">
-          <Link className="flex min-h-control items-center gap-2 rounded-control bg-surface-selected px-3 text-ui" to={appUrl.brainList}>
+          <Link className={cn("flex min-h-control items-center gap-2 rounded-control px-3 text-ui", location.pathname === appUrl.brainList && "bg-surface-selected")} to={appUrl.brainList}>
             <span className="font-mono text-xs text-text-muted">▤</span>
             <span className="flex-1">脳</span>
             <span className="font-mono text-xs text-text-muted">{sidebarBrains.length || ""}</span>
+          </Link>
+          <Link className={cn("flex min-h-control items-center rounded-control px-3 text-ui hover:bg-surface-selected", location.pathname === appUrl.connections && "bg-surface-selected")} to={appUrl.connections} aria-current={location.pathname === appUrl.connections ? "page" : undefined}>
+            AIとの接続
           </Link>
         </nav>
         {sidebarBrains.length > 0 && (
@@ -71,6 +75,7 @@ export function AppShell({ viewer, brains, sessionUnavailable, crumbs, search, o
             {[viewer?.name ?? "public", ...crumbs].map((crumb, index, values) => <span className={index === values.length - 1 ? "text-text" : undefined} key={`${crumb}-${index}`}>{index ? `/ ${crumb}` : crumb}</span>)}
           </div>
           <div className="flex-1" />
+          <Link className="text-ui md:hidden" to={appUrl.connections}>AIとの接続</Link>
           {search && (
             <div className="shell-search hidden sm:flex">
               <span className="font-mono text-sm text-text-muted">/</span>

@@ -1,7 +1,8 @@
-export type BrainTab = "pages" | "connect" | "invites";
+export type BrainTab = "pages" | "connect" | "settings" | "invites";
 
 export const appUrl = {
   brainList: "/",
+  connections: "/settings/connections",
   login: "/login",
   register: "/register",
   createBrain: "/brains/new",
@@ -14,6 +15,7 @@ export const appUrl = {
 } as const;
 
 export function brainUrl(sourceID: string, tab: BrainTab = "pages"): string {
+  if (tab === "connect") return appUrl.connections;
   const path = `/brains/${encodeURIComponent(sourceID)}`;
   return tab === "pages" ? path : `${path}?tab=${tab}`;
 }
@@ -65,5 +67,6 @@ export function brainTab(search: string): BrainTab {
   const query = new URLSearchParams(search);
   const tab = query.get("tab");
   if (tab === "connect" || query.get("connect") === "1") return "connect";
+  if (tab === "settings") return "settings";
   return tab === "invites" ? "invites" : "pages";
 }

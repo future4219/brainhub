@@ -4,6 +4,7 @@ import { BrainDetail } from "@/components/pages/BrainDetail";
 import { BrainList } from "@/components/pages/BrainList";
 import { BrainPage } from "@/components/pages/BrainPage";
 import { CreateBrain } from "@/components/pages/CreateBrain";
+import { Connections } from "@/components/pages/Connections";
 import { Error404 } from "@/components/pages/Error404";
 import { Invitation } from "@/components/pages/Invitation";
 import { Login } from "@/components/pages/Login";
@@ -17,6 +18,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path={appUrl.brainList} element={<BrainList />} />
+        <Route path={appUrl.connections} element={<Connections />} />
         <Route path={appUrl.login} element={<Login />} />
         <Route path={appUrl.register} element={<Register />} />
         <Route path={appUrl.createBrain} element={<CreateBrain />} />

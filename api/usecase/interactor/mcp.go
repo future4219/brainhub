@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +18,8 @@ import (
 const (
 	claudeMCPClientName  = "claude-web"
 	claudeRedirectURI    = "https://claude.ai/api/mcp/auth_callback"
+	codexMCPClientName   = "codex"
+	codexRedirectURI     = "http://127.0.0.1/callback"
 	authorizationCodeTTL = 5 * time.Minute
 	mcpAccessTokenTTL    = time.Hour
 	mcpRefreshTokenTTL   = 30 * 24 * time.Hour
@@ -49,6 +50,12 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 		connection.Client = &client
 	} else if !errors.Is(err, output_port.ErrNotFound) {
 		return connection, fmt.Errorf("find MCP client: %w", err)
+	}
+	codexClient, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, codexMCPClientName)
+	if err == nil {
+		connection.CodexClient = &codexClient
+	} else if !errors.Is(err, output_port.ErrNotFound) {
+		return connection, fmt.Errorf("find Codex client: %w", err)
 	}
 	connection.VisibleBrains, err = u.repository.ListMCPVisibleBrains(ctx, userID)
 	if err != nil {
@@ -93,8 +100,17 @@ func (u *mcpUseCase) RevokeCLIToken(ctx context.Context, id, userID string) erro
 	return nil
 }
 
-func (u *mcpUseCase) IssueClient(ctx context.Context, userID string) (entity.MCPClient, error) {
-	client, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, claudeMCPClientName)
+func (u *mcpUseCase) IssueClient(ctx context.Context, userID, name string) (entity.MCPClient, error) {
+	redirectURI := claudeRedirectURI
+	switch name {
+	case "", claudeMCPClientName:
+		name = claudeMCPClientName
+	case codexMCPClientName:
+		redirectURI = codexRedirectURI
+	default:
+		return entity.MCPClient{}, input_port.ErrOAuthInvalidClient
+	}
+	client, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, name)
 	if err == nil {
 		return client, nil
 	}
@@ -102,11 +118,17 @@ func (u *mcpUseCase) IssueClient(ctx context.Context, userID string) (entity.MCP
 		return entity.MCPClient{}, fmt.Errorf("find MCP client: %w", err)
 	}
 	client = entity.MCPClient{
-		ID: u.ids.New(), UserID: userID, Name: claudeMCPClientName,
-		RedirectURIs: []string{claudeRedirectURI}, CreatedAt: u.clock.Now(),
+		ID: u.ids.New(), UserID: userID, Name: name,
+		RedirectURIs: []string{redirectURI}, CreatedAt: u.clock.Now(),
+	}
+	if name == codexMCPClientName {
+		// Codex 0.149 also binds callbacks to the MCP URL using a SHA-256 prefix.
+		// Register that exact path alongside the issuer-bound /callback variant.
+		digest := sha256.Sum256([]byte(u.mcpURL))
+		client.RedirectURIs = append(client.RedirectURIs, codexRedirectURI+"/"+base64.RawURLEncoding.EncodeToString(digest[:9]))
 	}
 	if err := u.repository.CreateMCPClient(ctx, client); errors.Is(err, output_port.ErrConflict) {
-		return u.repository.FindActiveMCPClientByUserName(ctx, userID, claudeMCPClientName)
+		return u.repository.FindActiveMCPClientByUserName(ctx, userID, name)
 	} else if err != nil {
 		return entity.MCPClient{}, fmt.Errorf("create MCP client: %w", err)
 	}
@@ -127,7 +149,7 @@ func (u *mcpUseCase) ValidateAuthorization(ctx context.Context, input input_port
 	if input.ResponseType != "code" || input.CodeChallengeMethod != "S256" || !validPKCEValue(input.CodeChallenge) {
 		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidRequest
 	}
-	if !slices.Contains(client.RedirectURIs, input.RedirectURI) {
+	if !client.AllowsRedirectURI(input.RedirectURI) {
 		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidRequest
 	}
 	if input.Resource == "" {
@@ -157,7 +179,7 @@ func (u *mcpUseCase) ExchangeAuthorizationCode(ctx context.Context, clientID, ra
 	if err != nil {
 		return input_port.OAuthTokenPair{}, err
 	}
-	if !slices.Contains(client.RedirectURIs, redirectURI) || !validPKCEValue(verifier) {
+	if !client.AllowsRedirectURI(redirectURI) || !validPKCEValue(verifier) {
 		return input_port.OAuthTokenPair{}, input_port.ErrOAuthInvalidGrant
 	}
 	digest := sha256.Sum256([]byte(verifier))

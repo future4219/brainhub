@@ -174,7 +174,7 @@ func TestMCPOAuthPKCEIsOneTimeAndIssuesHashedRepositoryTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := useCase.IssueClient(context.Background(), "user-1")
+	client, err := useCase.IssueClient(context.Background(), "user-1", "claude-web")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestMCPOAuthRejectsNonASCIIAndNonS256PKCE(t *testing.T) {
 	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
 	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
-	client, err := useCase.IssueClient(context.Background(), "user-1")
+	client, err := useCase.IssueClient(context.Background(), "user-1", "claude-web")
 	if err != nil {
 		t.Fatal(err)
 	}

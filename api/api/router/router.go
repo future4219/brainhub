@@ -54,6 +54,7 @@ func New(brainUseCase input_port.BrainUseCase, pageUseCase input_port.PageUseCas
 	mux.Handle("GET /api/me", middleware.RequireSession(authUseCase, http.HandlerFunc(authHandler.Me)))
 	mux.Handle("GET /api/mcp/connection", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.Connection)))
 	mux.Handle("POST /api/mcp/client", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.IssueClient)))
+	mux.Handle("POST /api/mcp/clients/{name}", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.IssueClient)))
 	mux.Handle("POST /api/mcp/tokens", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.IssueCLIToken)))
 	mux.Handle("DELETE /api/mcp/tokens/{id}", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.RevokeCLIToken)))
 	mux.Handle("POST /api/mcp/reader/reissue", middleware.RequireSession(authUseCase, http.HandlerFunc(mcpHandler.ReissueReader)))

@@ -22,6 +22,7 @@ var (
 
 type MCPConnection struct {
 	Client        *entity.MCPClient
+	CodexClient   *entity.MCPClient
 	CLITokens     []entity.MCPToken
 	VisibleBrains []entity.MCPVisibleBrain
 	Reader        *entity.ReaderClient
@@ -59,7 +60,7 @@ type MCPCallAuthorization struct {
 
 type MCPUseCase interface {
 	Connection(context.Context, string) (MCPConnection, error)
-	IssueClient(context.Context, string) (entity.MCPClient, error)
+	IssueClient(context.Context, string, string) (entity.MCPClient, error)
 	IssueCLIToken(context.Context, string, string) (IssuedCLIToken, error)
 	RevokeCLIToken(context.Context, string, string) error
 	ValidateAuthorization(context.Context, OAuthAuthorizationRequest, string) (OAuthAuthorization, error)
