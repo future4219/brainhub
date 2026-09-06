@@ -13,8 +13,6 @@ import (
 	"brainhub/usecase/input_port"
 )
 
-const maxJSONBodyBytes = 64 << 10
-
 type BrainHandler struct {
 	useCase input_port.BrainUseCase
 }

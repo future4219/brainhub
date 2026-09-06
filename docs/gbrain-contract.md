@@ -26,18 +26,33 @@ brainhub が壊れる条件はこの表に尽きる。ここに無いものは�
 | `list_pages` | ページ一覧 | `GET /api/brains/{id}/pages` |
 | `sources_list` | source の実在確認 | `POST /api/brains/{id}/adopt` |
 | `get_page` | 単体取得 | `GET /api/brains/{id}/pages/{slug...}`、個別ページ閲覧 |
-| `put_page` | 本文全体の書き込みとwrite-through | ページ作成・編集 |
-| `schema_graph` | sourceに適用されたschema packの型一覧 | `GET /api/brains/{id}/page-types` |
-| `get_links` | brainhubが作成した状態辺の取得 | 編集画面の `superseded_by` |
-| `add_link` / `remove_link` | 状態辺の同期 | ページ保存後の `superseded_by` |
+| `put_page` | 本文全体の書き込みとwrite-through | MCP経由のページ作成・更新 |
 
 利用者向け `/mcp` はbrainhubがBearer tokenからUserを特定し、現在見られるsourceへrescopeした利用者別GBrain reader tokenに差し替える。`query` / `list_pages` / `get_page` は明示された `source_id` が範囲内かbrainhubで先に確認し、未指定時は `__all__` を注入する。sourceを指定できない操作も、利用者別readerのgrantを上限として転送する。
 
-#### `search` の source 境界（2026-08-23）
+#### 利用者MCPのページ書き込み（2026-09-07）
+
+OAuthは `read` / `read write` を受け付け、省略時は後者を要求範囲とする。画面で選んだ許可は要求範囲を超えられない。認可codeとaccess/refresh tokenそれぞれに `write_allowed` を保存する（Brainhub migration 000007）。既存行と旧画面からの許可はfalse。refreshは元の許可を引き継ぐ。
+
+`tools/list` は利用者別readerの一覧を維持し、write許可と現在編集できるreadyの脳がある場合だけ、`source_id` 必須の `put_page` を追加する。呼び出しでは現在のowner/editor権限を照合し、対象脳専用writerに切り替える。ルーティング後は `source_id` を除く。その他の操作にwriterを渡さず、Source作成・削除を有効にしない。OAuthのwrite許可とSourceの編集権限は独立し、どちらかがなければ書けない。
+
+#### Brainhub内部の通信境界
+
+HTTP handlerは要求を一度解析し、usecaseが現在の利用者・閲覧範囲・保存先を認可する。解析済み要求と秘密情報を含まない認可結果をサーバー内部contextで渡し、`adapter/gbrain/proxy.go` が接続選択、トークン取得、引数変換、Authorization差し替えを行う。認可情報の欠落や要求との不一致は転送しない。通常の応答は標準の `httputil.ReverseProxy` でストリーミングする。
+
+`SourceAccess` は接続準備・復旧、`UserReadAccess` は状態表示・起動時準備・復旧だけを上位へ公開する。画面へ渡す読み取り接続情報は状態と理由だけで、暗号化されたsecretやGBrain client IDを含めない。
+
+稼働中のv0.46.28.0を確認した結果、次の互換処理は残す。
+
+- 上流 `src/core/ops/pages.ts` の `put_page` は `source_id` を受け取らず、clientに固定されたSourceへ書く。Brainhubの明示的な保存先を照合してから、引数を除いて既存writerで転送する必要がある。
+- 上流 `src/commands/serve-http.ts` の `tools/list` は呼び出しtokenのscopeで一覧を絞るため、readerの一覧に `put_page` は含まれない。writerの一覧を別途取得すると、一覧表示のためにwriter準備と追加通信が必要になる。現在は小さい `put_page` 定義の追加を維持し、独自のスキーマ取得キャッシュは作らない。
+- 登録・範囲変更・失効は引き続きGBrainの既存Admin APIを使う。BrainhubにはMembershipとの対応付け、secretの暗号化保存、失敗時の復旧記録だけを残す。
+
+#### `search` の source 境界（2026-09-07更新）
 
 GBrain v0.46.28.0 の MCP `search` には `source_id` 引数がない。呼び出しごとに source を指定して絞ることはできず、検索対象は OAuth client の `federatedRead` grant で決まる。`gbrain-evals-amara-v1` の調査では、`federatedRead=["gbrain-evals-amara-v1"]` の専用 client を発行して source を限定した。
 
-brainhubの `/mcp` は `search` をHTTP 200のMCP tool errorとして拒否し、`query` を案内する。GBrainの `search` は `source_id` を受け取らずgrant全体を検索するため、別の結果フィルタで代替しない。
+brainhubの `/mcp` は `search` を利用者別readerで転送する。`source_id` は注入せず、現在の閲覧範囲へ更新した `federatedRead` grantで検索対象を制限する。範囲更新に失敗した場合は503で止め、以前の広いgrantで転送しない。以前の「searchを拒否する」という記述は古く、今回の整理前から転送する実装になっていた。
 
 ### OAuth 2.1
 
@@ -155,23 +170,23 @@ host can opt individual sources out without disabling auto-drain brain-wide.
 3. **`default` source は削除できない** — 予約語として弾いている
 4. **source id は `[a-z0-9-]{1,32}` で不変** — URL に使っている
 5. **source は git リポジトリである必要がある** — シムが `git init` する理由
-6. **`serve --http` が SSE を返す** — プロキシがバッファリングしない理由
+6. **`serve --http` が SSE を返す** — 通常の応答はストリーミング転送する。書き込みツールを追加する `tools/list` だけ、現在の1行JSON形式のSSEを読み取って変換する
 7. **`put_page` は `{slug, content}` で本文全体を受け取る** — `compiled_truth` と `timeline` の分離引数はない
 8. **`get_page` は `compiled_truth` / `timeline` / `frontmatter` / `content_hash` を分離して返す** — ただし `put_page` にhash/versionの事前条件はなく、楽観ロックは実装できない
-9. **`put_page` のwrite-throughは正本Markdownを書き、git commitする** — brainhubは `written` と `committed` の両方を成功条件にする
-10. **`schema_graph` は0ページのsourceでも適用packの型を返す** — 既存ページから型候補を推測しない
-11. **状態は明示的な `superseded_by` 辺が正** — `link_source=brainhub-web` の辺、frontmatter、本文の順で解釈し、本文中のStatus宣言は使わない
+9. **`put_page` のwrite-throughは正本Markdownを書き、git commitする** — MCPではGBrainの結果をそのままAIクライアントへ返す
 
-writer clientは `issued_clients` に入れない。`issued_clients.write_source_id` は利用者へ渡すclientの権限境界であり、User/Membershipと共に失効する。Web編集用writerはbrainhub自身が脳ごとに1本保持し、暗号化secretと復旧状態を `brain_writer_clients` で管理する。
+Web編集の廃止に伴い、型選択用の `schema_graph` と、`link_source=brainhub-web` の `superseded_by` 辺を読み書きする専用処理への依存は削除した。既存の本文や辺は変更しない。
+
+writer clientは `issued_clients` に入れない。`issued_clients.write_source_id` は利用者へ渡すclientの権限境界であり、User/Membershipと共に失効する。脳専用writerはbrainhub自身が脳ごとに1本保持し、暗号化secretと復旧状態を `brain_writer_clients` で管理する。
 
 ### REST の読み取り資格情報（2026-08-22）
 
-`GET /api/brains/{source}/pages`、個別ページ、page-types、REST編集は、すべて `brain_writer_clients` に保存したsource別client（`read write`、write sourceとfederated readを同じsourceに固定）を使う。これは暫定的な迂回ではない。owner/editorの個別ページ取得とpage-typesは当初から同じclientを読み取りに使っており、一覧とviewer/非メンバーの個別取得をその既存経路へ揃えたものである。
+`GET /api/brains/{source}/pages` と個別ページは、`brain_writer_clients` のsource別client（`read write`、write sourceとfederated readを同じsourceに固定）で読む。2026-09-07にWeb編集画面とREST作成・更新、page-types APIを削除した。Markdownの作成・更新はMCPの `put_page` に集約する。
 
 読み取り順序は次で固定する。
 
 1. `api/usecase/interactor/page.go` の `readAccess` がBrainの公開状態とmembershipを判定する
-2. 判定を通過した場合だけ、`api/adapter/gbrain/page_writer.go` がsource別clientを取得して `list_pages` / `get_page` を呼ぶ
+2. 判定を通過した場合だけ、`api/adapter/gbrain/page_reader.go` がsource別clientを取得して `list_pages` / `get_page` を呼ぶ
 3. `list_pages` と `get_page` には `source_id` を明示する
 4. 非メンバーには設定されたpublic typeだけを返し、それ以外は404として扱う
 
@@ -179,16 +194,7 @@ writer clientは `issued_clients` に入れない。`issued_clients.write_source
 
 source別clientのGBrain上の名前は現在 `brainhub-writer-<source>` である。v0.46.28.0の利用中のAdmin APIにはclientのrename操作がなく、Brainhubのadapterもregister/revokeだけを契約としている。既存clientの名称変更にはrevokeとsecret再発行が必要で、認可境界は変わらない一方で全Brainを一時的にdegradedにし得る。このため名称だけの移行は行わず、DB上の名前は維持する。
 
-読み取り専用clientを別に持つC案は、scopeを変えるだけでは実現できない。次の6経路をまとめて整理する独立した設計変更として扱う。
-
-1. Brain作成・adopt時のsource client発行（`api/usecase/interactor/brain.go`）
-2. 起動時backfill（`api/main.go`、`api/adapter/gbrain/writer_service.go`）
-3. 個別ページGet（`api/usecase/interactor/page.go`）
-4. page-types（`api/usecase/interactor/page.go`）
-5. REST作成・編集（`api/usecase/interactor/page.go`）
-6. owner用の再発行endpoint（`api/api/router/router.go`、`api/usecase/interactor/brain.go`）
-
-AIクライアントの `/mcp` 経路は別である。brainhub OAuth tokenを毎回hash照合し、Membershipと `public + ready` から現在のsource一覧を作り、利用者別readerをGBrainでrescopeしてからBearer tokenを差し替える。rescope失敗時は古い広いgrantへフォールバックせず503で失敗させる。旧 `issued_clients` のGBrain tokenとbrainhub tokenは `/mcp` で相互に代用できない。REST用source clientをAIクライアントの代わりに使ってはならない。
+AIクライアントの `/mcp` は、Brainhub OAuth tokenを毎回hash照合する。読むときはMembershipと `public + ready` から現在のsource一覧を作り、利用者別readerをGBrainでrescopeする。書くときはtokenのwrite許可と対象脳のowner/editor権限を照合して、その脳のsource別clientを使う。rescopeやwriter取得の失敗時は503で閉じる。旧 `issued_clients` のGBrain tokenとBrainhub tokenは `/mcp` で相互に代用できない。
 
 ---
 

@@ -1,5 +1,5 @@
 import type { InvitationsSectionProps } from "@/components/features/BrainDetail/types";
-import { copyLabel } from "@/components/features/BrainDetail/utils";
+import { copyLabel } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { CopyValue } from "@/components/ui/CopyValue";
 import { Feedback } from "@/components/ui/Feedback";

@@ -4,6 +4,7 @@ export type MCPClient = {
 };
 
 export type MCPVisibleBrain = {
+  can_write: boolean;
   source_id: string;
   name: string;
   state: string;
@@ -28,12 +29,15 @@ export type CreatedMCPCLIToken = MCPCLIToken & {
 
 export type MCPConnection = {
   client: MCPClient | null;
+  codex_client: MCPClient | null;
   cli_tokens: MCPCLIToken[];
   visible_brains: MCPVisibleBrain[];
   reader: MCPReader | null;
 };
 
 export type OAuthConsent = {
+  scope: "read" | "read write";
   client_name: string;
   client_id: string;
+  visible_brains: MCPVisibleBrain[];
 };

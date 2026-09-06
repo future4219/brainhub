@@ -32,6 +32,7 @@ func (a *readerAdminStub) RevokeClient(context.Context, string) error { return n
 type readerClientRepositoryStub struct {
 	client      entity.ReaderClient
 	orphanCalls int
+	findErr     error
 }
 
 func (r *readerClientRepositoryStub) CreateReaderClient(_ context.Context, client entity.ReaderClient) error {
@@ -39,7 +40,7 @@ func (r *readerClientRepositoryStub) CreateReaderClient(_ context.Context, clien
 	return nil
 }
 func (r *readerClientRepositoryStub) FindReaderClientByUser(context.Context, string) (entity.ReaderClient, error) {
-	return r.client, nil
+	return r.client, r.findErr
 }
 func (r *readerClientRepositoryStub) ListReaderClients(context.Context) ([]entity.ReaderClient, error) {
 	return []entity.ReaderClient{r.client}, nil
@@ -74,7 +75,7 @@ type readerIDStub struct{}
 
 func (readerIDStub) New() string { return "reader-row-id" }
 
-func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
+func TestUserReadAccessServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	clientID := "gbrain-reader"
 	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
 		ID: "reader-row", UserID: "user-1", GBrainClientID: &clientID,
@@ -83,7 +84,7 @@ func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	}}
 	admin := &readerAdminStub{rescopeErr: errors.New("admin unavailable")}
 	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("r", 32)))
-	service, err := NewReaderService("http://gbrain.test", admin, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
+	service, err := NewUserReadAccessService("http://gbrain.test", admin, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	}
 }
 
-func TestReaderServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
+func TestUserReadAccessServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
 	clientID := "gbrain-reader"
 	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
 		ID: "reader-row", UserID: "user-1", GBrainClientID: &clientID,
@@ -122,7 +123,7 @@ func TestReaderServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
 	defer server.Close()
 
 	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("r", 32)))
-	service, err := NewReaderService(server.URL, &readerAdminStub{}, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
+	service, err := NewUserReadAccessService(server.URL, &readerAdminStub{}, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,5 +138,29 @@ func TestReaderServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
 	token, err := service.AccessToken(context.Background(), "user-1", []entity.SourceID{"brain-a"})
 	if err != nil || token != "fresh-token" || tokenCalls != 1 {
 		t.Fatalf("token/calls/error = %q %d %v", token, tokenCalls, err)
+	}
+}
+
+func TestReadConnectionManagementDoesNotExposeCredentials(t *testing.T) {
+	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
+		UserID: "user-1", State: entity.ReaderClientStateOrphan, StateReason: "reissue required",
+		ClientSecretCiphertext: []byte("must stay inside adapter"),
+	}}
+	service := &UserReadAccessService{repository: repository}
+	status, err := service.Status(context.Background(), "user-1")
+	if err != nil || status == nil || status.State != entity.ReaderClientStateOrphan || status.StateReason != "reissue required" {
+		t.Fatalf("status = %+v %v", status, err)
+	}
+	users, err := service.ConnectedUsers(context.Background())
+	if err != nil || len(users) != 1 || users[0] != "user-1" {
+		t.Fatalf("users = %v %v", users, err)
+	}
+	repository.findErr = output_port.ErrNotFound
+	if status, err := service.Status(context.Background(), "user-1"); err != nil || status != nil {
+		t.Fatalf("missing connection = %+v %v", status, err)
+	}
+	repository.findErr = errors.New("database unavailable")
+	if _, err := service.Status(context.Background(), "user-1"); err == nil {
+		t.Fatal("database failure must not look like an unconfigured connection")
 	}
 }

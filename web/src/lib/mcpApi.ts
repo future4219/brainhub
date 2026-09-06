@@ -10,8 +10,10 @@ export function getMCPConnection(): Promise<MCPConnection> {
   return requestJSON("/mcp/connection");
 }
 
-export function issueMCPClient(): Promise<MCPClient> {
-  return postJSON("/mcp/client");
+export function issueMCPClient(
+  name: "claude-web" | "codex",
+): Promise<MCPClient> {
+  return postJSON(`/mcp/clients/${name}`);
 }
 
 export function issueMCPCLIToken(label: string): Promise<CreatedMCPCLIToken> {
@@ -35,9 +37,11 @@ export function getOAuthConsent(search: string): Promise<OAuthConsent> {
 export function decideOAuth(
   search: string,
   decision: "approve" | "deny",
+  grantedScope: "read" | "read write",
 ): Promise<{ redirect_uri: string }> {
   const params = new URLSearchParams(search);
   params.set("decision", decision);
+  params.set("granted_scope", grantedScope);
   return requestJSON("/oauth/authorization", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

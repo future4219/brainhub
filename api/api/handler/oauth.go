@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"brainhub/api/middleware"
+	"brainhub/api/schema"
+	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
 )
 
@@ -33,16 +35,17 @@ func NewOAuthHandler(useCase input_port.MCPUseCase, mcpURL, webURL string) (*OAu
 func (h *OAuthHandler) AuthorizationServerMetadata(w http.ResponseWriter, _ *http.Request) {
 	h.cors(w)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"issuer":                                     h.issuer,
-		"authorization_endpoint":                     h.issuer + "authorize",
-		"token_endpoint":                             h.issuer + "token",
-		"revocation_endpoint":                        h.issuer + "revoke",
-		"response_types_supported":                   []string{"code"},
-		"grant_types_supported":                      []string{"authorization_code", "refresh_token"},
-		"code_challenge_methods_supported":           []string{"S256"},
-		"token_endpoint_auth_methods_supported":      []string{"none"},
-		"revocation_endpoint_auth_methods_supported": []string{"none"},
-		"scopes_supported":                           []string{"read"},
+		"issuer":                                         h.issuer,
+		"authorization_endpoint":                         h.issuer + "authorize",
+		"token_endpoint":                                 h.issuer + "token",
+		"revocation_endpoint":                            h.issuer + "revoke",
+		"response_types_supported":                       []string{"code"},
+		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
+		"code_challenge_methods_supported":               []string{"S256"},
+		"token_endpoint_auth_methods_supported":          []string{"none"},
+		"revocation_endpoint_auth_methods_supported":     []string{"none"},
+		"scopes_supported":                               []string{"read", "write"},
+		"authorization_response_iss_parameter_supported": true,
 	})
 }
 
@@ -51,7 +54,7 @@ func (h *OAuthHandler) ProtectedResourceMetadata(w http.ResponseWriter, _ *http.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":              h.mcpURL,
 		"authorization_servers": []string{h.issuer},
-		"scopes_supported":      []string{"read"},
+		"scopes_supported":      []string{"read", "write"},
 		"resource_name":         "brainhub MCP Server",
 	})
 }
@@ -82,9 +85,16 @@ func (h *OAuthHandler) Consent(w http.ResponseWriter, r *http.Request) {
 		h.authorizationError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"client_name": authorization.Client.Name,
-		"client_id":   authorization.Client.ID,
+	connection, err := h.useCase.Connection(r.Context(), current.User.ID)
+	if err != nil {
+		http.Error(w, "failed to load access scope", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"client_name":    authorization.Client.Name,
+		"scope":          authorization.Input.Scope,
+		"client_id":      authorization.Client.ID,
+		"visible_brains": schema.MCPConnectionResponseFromInput(connection).VisibleBrains,
 	})
 }
 
@@ -102,6 +112,7 @@ func (h *OAuthHandler) Decide(w http.ResponseWriter, r *http.Request) {
 	}
 	redirect, _ := url.Parse(authorization.Input.RedirectURI)
 	query := redirect.Query()
+	query.Set("iss", h.issuer)
 	if state := r.Form.Get("state"); state != "" {
 		query.Set("state", state)
 	}
@@ -159,7 +170,7 @@ func (h *OAuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 		"token_type":    "Bearer",
 		"expires_in":    int64(pair.ExpiresIn.Seconds()),
 		"refresh_token": pair.RefreshToken,
-		"scope":         "read",
+		"scope":         entity.MCPScope(pair.WriteAllowed),
 	})
 }
 
@@ -201,6 +212,8 @@ func (h *OAuthHandler) authorizationError(w http.ResponseWriter, err error) {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_client", "Unknown or revoked client.")
 	case errors.Is(err, input_port.ErrOAuthAccessDenied):
 		writeOAuthError(w, http.StatusForbidden, "access_denied", "This Client ID belongs to another brainhub user.")
+	case errors.Is(err, input_port.ErrOAuthInvalidScope):
+		writeOAuthError(w, http.StatusBadRequest, "invalid_scope", "Only read and write scopes are supported; consent cannot exceed the requested scope.")
 	case errors.Is(err, input_port.ErrOAuthInvalidRequest):
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "response_type, redirect_uri, resource, and PKCE S256 must match the registered client.")
 	default:
@@ -229,7 +242,7 @@ func (h *OAuthHandler) ProtectedResourceMetadataURL() string {
 
 func authorizationInput(value func(string) string) input_port.OAuthAuthorizationRequest {
 	return input_port.OAuthAuthorizationRequest{
-		ClientID: value("client_id"), RedirectURI: value("redirect_uri"), ResponseType: value("response_type"),
+		Scope: value("scope"), GrantedScope: value("granted_scope"), ClientID: value("client_id"), RedirectURI: value("redirect_uri"), ResponseType: value("response_type"),
 		CodeChallenge: value("code_challenge"), CodeChallengeMethod: value("code_challenge_method"), Resource: value("resource"),
 	}
 }

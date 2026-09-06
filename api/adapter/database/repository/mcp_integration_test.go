@@ -69,7 +69,7 @@ func TestMCPRepositoryAuthorizationBoundaryWithPostgres(t *testing.T) {
 	if err := store.CreateMCPClient(ctx, client); err != nil {
 		t.Fatal(err)
 	}
-	access, refresh, err := store.CreateMCPTokenPair(ctx, client.ID, user.ID, now.Add(time.Hour), now.Add(30*24*time.Hour))
+	access, refresh, err := store.CreateMCPTokenPair(ctx, client.ID, user.ID, false, now.Add(time.Hour), now.Add(30*24*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,6 +185,44 @@ func TestMCPRepositoryAuthorizationBoundaryWithPostgres(t *testing.T) {
 	}
 	if _, _, _, err := store.RotateMCPRefreshToken(ctx, refresh, client.ID, now, now.Add(time.Hour), now.Add(30*24*time.Hour)); !errors.Is(err, output_port.ErrNotFound) {
 		t.Fatalf("paired refresh token error = %v", err)
+	}
+	for _, writeAllowed := range []bool{false, true} {
+		code := entity.MCPAuthorizationCode{
+			ID: ids.New(), ClientID: client.ID, UserID: user.ID,
+			RedirectURI: client.RedirectURIs[0], CodeChallenge: "challenge", Resource: "https://brainhub.example/mcp",
+			ExpiresAt: now.Add(time.Minute), CreatedAt: now, WriteAllowed: writeAllowed,
+		}
+		rawCode, err := store.CreateMCPAuthorizationCode(ctx, code)
+		if err != nil {
+			t.Fatal(err)
+		}
+		consumed, err := store.ConsumeMCPAuthorizationCode(ctx, rawCode, client.ID, code.RedirectURI, code.CodeChallenge, now)
+		if err != nil || consumed.WriteAllowed != writeAllowed {
+			t.Fatalf("code scope: %+v %v", consumed, err)
+		}
+		access, refresh, err := store.CreateMCPTokenPair(ctx, client.ID, user.ID, consumed.WriteAllowed, now.Add(time.Hour), now.Add(30*24*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		verified, err := store.VerifyMCPAccessToken(ctx, access, now)
+		if err != nil || verified.WriteAllowed != writeAllowed {
+			t.Fatalf("access scope: %+v %v", verified, err)
+		}
+		old, rotated, nextRefresh, err := store.RotateMCPRefreshToken(ctx, refresh, client.ID, now, now.Add(time.Hour), now.Add(30*24*time.Hour))
+		if err != nil || old.WriteAllowed != writeAllowed {
+			t.Fatalf("refresh scope: %+v %v", old, err)
+		}
+		verified, err = store.VerifyMCPAccessToken(ctx, rotated, now)
+		if err != nil || verified.WriteAllowed != writeAllowed {
+			t.Fatalf("rotated access scope: %+v %v", verified, err)
+		}
+		if _, _, _, err := store.RotateMCPRefreshToken(ctx, refresh, client.ID, now, now.Add(time.Hour), now.Add(time.Hour)); !errors.Is(err, output_port.ErrNotFound) {
+			t.Fatal("refresh replay succeeded")
+		}
+		old, _, _, err = store.RotateMCPRefreshToken(ctx, nextRefresh, client.ID, now, now.Add(time.Hour), now.Add(time.Hour))
+		if err != nil || old.WriteAllowed != writeAllowed {
+			t.Fatalf("second refresh scope: %+v %v", old, err)
+		}
 	}
 }
 

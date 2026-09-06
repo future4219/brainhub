@@ -4,7 +4,7 @@ import type { PagesSectionProps } from "@/components/features/BrainDetail/types"
 import { Feedback } from "@/components/ui/Feedback";
 import { Input } from "@/components/ui/Input";
 import { Panel } from "@/components/ui/Panel";
-import { newPageUrl, pageUrl } from "@/config/url";
+import { pageUrl } from "@/config/url";
 import { formatDate } from "@/lib/format";
 
 export function PagesSection(props: PagesSectionProps) {
@@ -76,14 +76,6 @@ export function PagesSection(props: PagesSectionProps) {
                 : ""}
             </h2>
             <div className="flex-1" />
-            {props.canWrite && (
-              <Link
-                className="h-control-sm rounded-control border border-border-strong bg-text px-3 py-1.5 text-ui text-canvas"
-                to={newPageUrl(props.sourceID)}
-              >
-                ページを作成
-              </Link>
-            )}
             {(["updated", "slug"] as const).map((value) => (
               <button
                 className={
@@ -102,7 +94,7 @@ export function PagesSection(props: PagesSectionProps) {
           </div>
           {props.pages.length === 0 && (
             <Feedback kind="empty">
-              ページがありません。ページが追加されるとここに索引が表示されます。
+              ページがありません。接続したAIに、この脳へ内容を保存するよう頼んでください。
             </Feedback>
           )}
           {props.pages.length > 0 && props.visiblePages.length === 0 && (

@@ -10,6 +10,8 @@ import type { ViewerState } from "@/entities/user/entity";
 
 type OAuthConsentPresenterProps = ViewerState & {
   consent: OAuthConsent | null;
+  writeAllowed: boolean;
+  onWriteAllowed: (allowed: boolean) => void;
   error: string;
   submitting: boolean;
   loginNext: string;
@@ -19,6 +21,8 @@ type OAuthConsentPresenterProps = ViewerState & {
 
 export function OAuthConsentPresenter({
   consent,
+  writeAllowed,
+  onWriteAllowed,
   error,
   submitting,
   loginNext,
@@ -28,13 +32,13 @@ export function OAuthConsentPresenter({
 }: OAuthConsentPresenterProps) {
   return (
     <AppShell {...shell} crumbs={["接続を許可"]}>
-      <main className="mx-auto max-w-credentials px-4 pb-20 pt-12 sm:px-8">
+      <main className="mx-auto w-full max-w-copy px-4 pb-20 pt-8 sm:pt-12">
         <header>
           <p className="font-mono text-xs uppercase tracking-section text-text-muted">
             oauth authorization
           </p>
           <h1 className="mt-2 text-title font-semibold tracking-tight">
-            このクライアントに脳へのアクセスを許可しますか
+            Brainhubへの接続を許可しますか
           </h1>
         </header>
 
@@ -60,31 +64,102 @@ export function OAuthConsentPresenter({
           )}
           {error && <Feedback kind="error">{error}</Feedback>}
           {shell.viewer && consent && (
-            <div className="p-4">
+            <div className="p-4 sm:p-6">
               <dl className="space-y-4 text-ui">
                 <div>
                   <dt className="text-text-muted">クライアント</dt>
-                  <dd className="mt-1 font-mono text-text">
-                    {consent.client_name}
+                  <dd className="mt-1 break-words text-section font-semibold text-text">
+                    {consent.client_name === "codex"
+                      ? "Codex"
+                      : consent.client_name}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-text-muted">許可する内容</dt>
                   <dd className="mt-1 text-text-secondary">
-                    現在あなたが見られる脳の読み取り。Membershipや公開範囲の変更は次の呼び出しから反映されます。
+                    あなたが見られる脳の検索とページの読み取り。
+                    脳への参加・退出や権限の変更は、この接続にも反映されます。
                   </dd>
                 </div>
-                <div>
-                  <dt className="text-text-muted">書き込み</dt>
-                  <dd className="mt-1 text-text">許可しない</dd>
-                </div>
               </dl>
-              <div className="mt-6 flex gap-2">
-                <Button
-                  type="button"
-                  disabled={submitting}
-                  onClick={onApprove}
-                >
+              <fieldset
+                className="mt-6 space-y-3 text-ui"
+                disabled={submitting}
+              >
+                <legend className="mb-2 font-semibold">接続の権限</legend>
+                <label className="flex items-start gap-3 rounded-control border border-border-control p-3">
+                  <input
+                    type="radio"
+                    name="access"
+                    className="mt-1"
+                    checked={writeAllowed}
+                    disabled={consent.scope !== "read write"}
+                    onChange={() => onWriteAllowed(true)}
+                  />
+                  <span>
+                    <span className="block font-semibold">
+                      読み取り・書き込み
+                    </span>
+                    <span className="mt-1 block text-text-secondary">
+                      編集権限のある脳で、ページの作成・更新を許可します。今後作る脳にも適用されます。
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-control border border-border-control p-3">
+                  <input
+                    type="radio"
+                    name="access"
+                    className="mt-1"
+                    checked={!writeAllowed}
+                    onChange={() => onWriteAllowed(false)}
+                  />
+                  <span>
+                    <span className="block font-semibold">読み取りのみ</span>
+                    <span className="mt-1 block text-text-secondary">
+                      検索と閲覧だけを許可します。
+                    </span>
+                  </span>
+                </label>
+                {consent.scope !== "read write" && (
+                  <p className="text-text-muted">
+                    接続元が読み取りのみを要求しています。書き込みも許可するには、接続元から読み取り・書き込みを要求して再認可してください。
+                  </p>
+                )}
+              </fieldset>
+              <h2 className="mt-6 text-body font-semibold">現在読める脳</h2>
+              {consent.visible_brains.length === 0 ? (
+                <p className="mt-2 text-ui text-text-muted">
+                  現在読める脳はありません。脳を作るか招待を受けると、この接続から利用できます。
+                </p>
+              ) : (
+                <ul className="mt-2 divide-y divide-divider">
+                  {consent.visible_brains.map((brain) => (
+                    <li
+                      key={brain.source_id}
+                      className="flex items-center justify-between gap-4 py-3 text-ui"
+                    >
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold">
+                          {brain.name}
+                        </p>
+                        <p className="mt-1 break-all font-mono text-xs text-text-muted">
+                          {brain.source_id}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-badge border border-border-control px-2 py-1 text-xs text-text-secondary">
+                        {writeAllowed && brain.can_write
+                          ? "読み書き"
+                          : "読み取り"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-4 border-t border-border pt-4 text-ui text-text-secondary">
+                許可すると接続元のAIに戻ります。
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
+                <Button type="button" disabled={submitting} onClick={onApprove}>
                   {submitting ? "処理中…" : "許可する"}
                 </Button>
                 <Button

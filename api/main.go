@@ -32,10 +32,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	pool, err := database.Open(context.Background(), configuration.DatabaseURL)
 	if err != nil {
@@ -45,16 +41,16 @@ func main() {
 	clock := clock.Clock{}
 	ids := ulid.Generator{}
 	repositories := repository.New(pool, clock, ids)
-	writerService, err := gbrain.NewWriterService(
+	sourceAccess, err := gbrain.NewSourceAccessService(
 		configuration.GBrainBaseURL, adminClient, repositories, clock, configuration.WriterCredentialKey,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := writerService.Backfill(context.Background()); err != nil {
+	if err := sourceAccess.Backfill(context.Background()); err != nil {
 		log.Printf("brain writer backfill incomplete: %v", err)
 	}
-	readerService, err := gbrain.NewReaderService(
+	userReadAccess, err := gbrain.NewUserReadAccessService(
 		configuration.GBrainBaseURL, adminClient, repositories, clock, ids, configuration.WriterCredentialKey,
 	)
 	if err != nil {
@@ -64,11 +60,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, writerService, clock, ids)
+	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL, userReadAccess, sourceAccess)
 	if err != nil {
 		log.Fatal(err)
 	}
-	pageUseCase, err := interactor.NewPageUseCase(writerService, repositories, repositories, configuration.PublicPageTypes)
+	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, sourceAccess, clock, ids)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pageUseCase, err := interactor.NewPageUseCase(sourceAccess, repositories, repositories, configuration.PublicPageTypes)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, readerService, clock, ids, configuration.PublicMCPURL)
+	mcpUseCase, err := interactor.NewMCPUseCase(repositories, userReadAccess, clock, ids, configuration.PublicMCPURL)
 	if err != nil {
 		log.Fatal(err)
 	}

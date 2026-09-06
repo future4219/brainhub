@@ -1,19 +1,19 @@
-export type BrainTab = "pages" | "connect" | "invites";
+export type BrainTab = "pages" | "connect" | "settings" | "invites";
 
 export const appUrl = {
   brainList: "/",
+  connections: "/settings/connections",
   login: "/login",
   register: "/register",
   createBrain: "/brains/new",
   brainDetail: "/brains/:sourceID",
   brainPage: "/brains/:sourceID/pages/*",
-  newPage: "/brains/:sourceID/page-editor/new",
-  editPage: "/brains/:sourceID/page-editor/edit/*",
   invitation: "/invite/:token",
   oauthAuthorize: "/oauth/authorize",
 } as const;
 
 export function brainUrl(sourceID: string, tab: BrainTab = "pages"): string {
+  if (tab === "connect") return appUrl.connections;
   const path = `/brains/${encodeURIComponent(sourceID)}`;
   return tab === "pages" ? path : `${path}?tab=${tab}`;
 }
@@ -40,15 +40,6 @@ export function markdownPageHref(sourceID: string, href?: string): string | unde
   return pageUrl(sourceID, slug) + (suffixAt < 0 ? "" : href.slice(suffixAt));
 }
 
-export function newPageUrl(sourceID: string): string {
-  return `/brains/${encodeURIComponent(sourceID)}/page-editor/new`;
-}
-
-export function editPageUrl(sourceID: string, slug: string): string {
-  const encodedSlug = slug.split("/").map(encodeURIComponent).join("/");
-  return `/brains/${encodeURIComponent(sourceID)}/page-editor/edit/${encodedSlug}`;
-}
-
 export function loginUrl(next?: string): string {
   return next
     ? `${appUrl.login}?next=${encodeURIComponent(next)}`
@@ -65,5 +56,6 @@ export function brainTab(search: string): BrainTab {
   const query = new URLSearchParams(search);
   const tab = query.get("tab");
   if (tab === "connect" || query.get("connect") === "1") return "connect";
+  if (tab === "settings") return "settings";
   return tab === "invites" ? "invites" : "pages";
 }

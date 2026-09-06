@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +18,8 @@ import (
 const (
 	claudeMCPClientName  = "claude-web"
 	claudeRedirectURI    = "https://claude.ai/api/mcp/auth_callback"
+	codexMCPClientName   = "codex"
+	codexRedirectURI     = "http://127.0.0.1/callback"
 	authorizationCodeTTL = 5 * time.Minute
 	mcpAccessTokenTTL    = time.Hour
 	mcpRefreshTokenTTL   = 30 * 24 * time.Hour
@@ -27,19 +28,18 @@ const (
 )
 
 type mcpUseCase struct {
-	repository output_port.MCPRepository
-	readers    output_port.ReaderClientRepository
-	reader     output_port.BrainReader
-	clock      output_port.Clock
-	ids        output_port.IDGenerator
-	mcpURL     string
+	repository     output_port.MCPRepository
+	userReadAccess output_port.UserReadAccess
+	clock          output_port.Clock
+	ids            output_port.IDGenerator
+	mcpURL         string
 }
 
-func NewMCPUseCase(repository output_port.MCPRepository, readers output_port.ReaderClientRepository, reader output_port.BrainReader, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
-	if repository == nil || readers == nil || reader == nil || clock == nil || ids == nil || mcpURL == "" {
+func NewMCPUseCase(repository output_port.MCPRepository, userReadAccess output_port.UserReadAccess, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
+	if repository == nil || userReadAccess == nil || clock == nil || ids == nil || mcpURL == "" {
 		return nil, errors.New("all MCP dependencies are required")
 	}
-	return &mcpUseCase{repository: repository, readers: readers, reader: reader, clock: clock, ids: ids, mcpURL: mcpURL}, nil
+	return &mcpUseCase{repository: repository, userReadAccess: userReadAccess, clock: clock, ids: ids, mcpURL: mcpURL}, nil
 }
 
 func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.MCPConnection, error) {
@@ -50,6 +50,12 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 	} else if !errors.Is(err, output_port.ErrNotFound) {
 		return connection, fmt.Errorf("find MCP client: %w", err)
 	}
+	codexClient, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, codexMCPClientName)
+	if err == nil {
+		connection.CodexClient = &codexClient
+	} else if !errors.Is(err, output_port.ErrNotFound) {
+		return connection, fmt.Errorf("find Codex client: %w", err)
+	}
 	connection.VisibleBrains, err = u.repository.ListMCPVisibleBrains(ctx, userID)
 	if err != nil {
 		return connection, fmt.Errorf("list MCP-visible brains: %w", err)
@@ -58,11 +64,9 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 	if err != nil {
 		return connection, fmt.Errorf("list MCP CLI tokens: %w", err)
 	}
-	reader, err := u.readers.FindReaderClientByUser(ctx, userID)
-	if err == nil {
-		connection.Reader = &reader
-	} else if !errors.Is(err, output_port.ErrNotFound) {
-		return connection, fmt.Errorf("find reader client: %w", err)
+	connection.Reader, err = u.userReadAccess.Status(ctx, userID)
+	if err != nil {
+		return connection, fmt.Errorf("find read connection: %w", err)
 	}
 	return connection, nil
 }
@@ -93,8 +97,17 @@ func (u *mcpUseCase) RevokeCLIToken(ctx context.Context, id, userID string) erro
 	return nil
 }
 
-func (u *mcpUseCase) IssueClient(ctx context.Context, userID string) (entity.MCPClient, error) {
-	client, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, claudeMCPClientName)
+func (u *mcpUseCase) IssueClient(ctx context.Context, userID, name string) (entity.MCPClient, error) {
+	redirectURI := claudeRedirectURI
+	switch name {
+	case "", claudeMCPClientName:
+		name = claudeMCPClientName
+	case codexMCPClientName:
+		redirectURI = codexRedirectURI
+	default:
+		return entity.MCPClient{}, input_port.ErrOAuthInvalidClient
+	}
+	client, err := u.repository.FindActiveMCPClientByUserName(ctx, userID, name)
 	if err == nil {
 		return client, nil
 	}
@@ -102,11 +115,17 @@ func (u *mcpUseCase) IssueClient(ctx context.Context, userID string) (entity.MCP
 		return entity.MCPClient{}, fmt.Errorf("find MCP client: %w", err)
 	}
 	client = entity.MCPClient{
-		ID: u.ids.New(), UserID: userID, Name: claudeMCPClientName,
-		RedirectURIs: []string{claudeRedirectURI}, CreatedAt: u.clock.Now(),
+		ID: u.ids.New(), UserID: userID, Name: name,
+		RedirectURIs: []string{redirectURI}, CreatedAt: u.clock.Now(),
+	}
+	if name == codexMCPClientName {
+		// Codex 0.149 also binds callbacks to the MCP URL using a SHA-256 prefix.
+		// Register that exact path alongside the issuer-bound /callback variant.
+		digest := sha256.Sum256([]byte(u.mcpURL))
+		client.RedirectURIs = append(client.RedirectURIs, codexRedirectURI+"/"+base64.RawURLEncoding.EncodeToString(digest[:9]))
 	}
 	if err := u.repository.CreateMCPClient(ctx, client); errors.Is(err, output_port.ErrConflict) {
-		return u.repository.FindActiveMCPClientByUserName(ctx, userID, claudeMCPClientName)
+		return u.repository.FindActiveMCPClientByUserName(ctx, userID, name)
 	} else if err != nil {
 		return entity.MCPClient{}, fmt.Errorf("create MCP client: %w", err)
 	}
@@ -127,7 +146,7 @@ func (u *mcpUseCase) ValidateAuthorization(ctx context.Context, input input_port
 	if input.ResponseType != "code" || input.CodeChallengeMethod != "S256" || !validPKCEValue(input.CodeChallenge) {
 		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidRequest
 	}
-	if !slices.Contains(client.RedirectURIs, input.RedirectURI) {
+	if !client.AllowsRedirectURI(input.RedirectURI) {
 		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidRequest
 	}
 	if input.Resource == "" {
@@ -136,6 +155,11 @@ func (u *mcpUseCase) ValidateAuthorization(ctx context.Context, input input_port
 	if input.Resource != u.mcpURL {
 		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidRequest
 	}
+	scope, ok := normalizeMCPScope(input.Scope)
+	if !ok {
+		return input_port.OAuthAuthorization{}, input_port.ErrOAuthInvalidScope
+	}
+	input.Scope = scope
 	return input_port.OAuthAuthorization{Client: client, Input: input}, nil
 }
 
@@ -144,9 +168,21 @@ func (u *mcpUseCase) ApproveAuthorization(ctx context.Context, input input_port.
 	if err != nil {
 		return "", err
 	}
+	if userID == "" {
+		return "", input_port.ErrOAuthAccessDenied
+	}
+	// Missing consent never grants write (including old consent tabs).
+	granted := input.GrantedScope
+	if granted == "" {
+		granted = "read"
+	}
+	granted, valid := normalizeMCPScope(granted)
+	if !valid || (granted == "read write" && authorization.Input.Scope != "read write") {
+		return "", input_port.ErrOAuthInvalidScope
+	}
 	now := u.clock.Now()
 	return u.repository.CreateMCPAuthorizationCode(ctx, entity.MCPAuthorizationCode{
-		ID: u.ids.New(), ClientID: authorization.Client.ID, UserID: userID,
+		ID: u.ids.New(), ClientID: authorization.Client.ID, UserID: userID, WriteAllowed: granted == "read write",
 		RedirectURI: authorization.Input.RedirectURI, CodeChallenge: authorization.Input.CodeChallenge,
 		Resource: authorization.Input.Resource, ExpiresAt: now.Add(authorizationCodeTTL), CreatedAt: now,
 	})
@@ -157,7 +193,7 @@ func (u *mcpUseCase) ExchangeAuthorizationCode(ctx context.Context, clientID, ra
 	if err != nil {
 		return input_port.OAuthTokenPair{}, err
 	}
-	if !slices.Contains(client.RedirectURIs, redirectURI) || !validPKCEValue(verifier) {
+	if !client.AllowsRedirectURI(redirectURI) || !validPKCEValue(verifier) {
 		return input_port.OAuthTokenPair{}, input_port.ErrOAuthInvalidGrant
 	}
 	digest := sha256.Sum256([]byte(verifier))
@@ -169,7 +205,7 @@ func (u *mcpUseCase) ExchangeAuthorizationCode(ctx context.Context, clientID, ra
 	if err != nil {
 		return input_port.OAuthTokenPair{}, fmt.Errorf("consume authorization code: %w", err)
 	}
-	return u.createTokenPair(ctx, code.ClientID, code.UserID)
+	return u.createTokenPair(ctx, code.ClientID, code.UserID, code.WriteAllowed)
 }
 
 func (u *mcpUseCase) RefreshAccessToken(ctx context.Context, clientID, rawRefreshToken string) (input_port.OAuthTokenPair, error) {
@@ -177,7 +213,7 @@ func (u *mcpUseCase) RefreshAccessToken(ctx context.Context, clientID, rawRefres
 		return input_port.OAuthTokenPair{}, err
 	}
 	now := u.clock.Now()
-	_, access, refresh, err := u.repository.RotateMCPRefreshToken(
+	token, access, refresh, err := u.repository.RotateMCPRefreshToken(
 		ctx, rawRefreshToken, clientID, now, now.Add(mcpAccessTokenTTL), now.Add(mcpRefreshTokenTTL),
 	)
 	if errors.Is(err, output_port.ErrNotFound) {
@@ -186,7 +222,7 @@ func (u *mcpUseCase) RefreshAccessToken(ctx context.Context, clientID, rawRefres
 	if err != nil {
 		return input_port.OAuthTokenPair{}, fmt.Errorf("rotate refresh token: %w", err)
 	}
-	return input_port.OAuthTokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: mcpAccessTokenTTL}, nil
+	return input_port.OAuthTokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: mcpAccessTokenTTL, WriteAllowed: token.WriteAllowed}, nil
 }
 
 func (u *mcpUseCase) RevokeToken(ctx context.Context, clientID, rawToken string) error {
@@ -217,6 +253,30 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		sources[i] = brain.SourceID
 		allowed[brain.SourceID.String()] = struct{}{}
 	}
+	// Only page writes get an explicit write target. Source management and all
+	// other operations retain read-only permissions.
+	writable := make([]string, 0)
+	if token.WriteAllowed {
+		for _, brain := range visible {
+			if brain.CanWrite() {
+				writable = append(writable, brain.SourceID.String())
+			}
+		}
+	}
+	if toolName == "put_page" {
+		if !token.WriteAllowed || requestedSource == nil || *requestedSource == "" || *requestedSource == "__all__" {
+			return input_port.MCPCallAuthorization{}, input_port.ErrMCPForbidden
+		}
+		for _, brain := range visible {
+			if brain.SourceID.String() == *requestedSource && brain.CanWrite() {
+				return input_port.MCPCallAuthorization{
+					UserID: token.UserID, ToolName: toolName,
+					WriteTarget: &input_port.MCPWriteTarget{BrainID: brain.ID, SourceID: brain.SourceID},
+				}, nil
+			}
+		}
+		return input_port.MCPCallAuthorization{}, input_port.ErrMCPForbidden
+	}
 	var injected *string
 	if toolName == "query" || toolName == "list_pages" || toolName == "get_page" {
 		value := "__all__"
@@ -228,11 +288,10 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		}
 		injected = &value
 	}
-	upstreamToken, err := u.reader.AccessToken(ctx, token.UserID, sources)
-	if err != nil {
-		return input_port.MCPCallAuthorization{}, fmt.Errorf("prepare GBrain reader: %w", err)
-	}
-	return input_port.MCPCallAuthorization{GBrainToken: upstreamToken, SourceID: injected}, nil
+	return input_port.MCPCallAuthorization{
+		UserID: token.UserID, ToolName: toolName, ReadableSources: sources,
+		SourceID: injected, WritableSources: writable,
+	}, nil
 }
 
 func (u *mcpUseCase) ReissueReader(ctx context.Context, userID string) error {
@@ -240,22 +299,22 @@ func (u *mcpUseCase) ReissueReader(ctx context.Context, userID string) error {
 	if err != nil {
 		return err
 	}
-	return u.reader.Reissue(ctx, userID, sourceIDs(visible))
+	return u.userReadAccess.Reissue(ctx, userID, sourceIDs(visible))
 }
 
 func (u *mcpUseCase) ReconcileReaders(ctx context.Context) error {
-	clients, err := u.readers.ListReaderClients(ctx)
+	users, err := u.userReadAccess.ConnectedUsers(ctx)
 	if err != nil {
 		return err
 	}
 	var failures []error
-	for _, client := range clients {
-		visible, err := u.repository.ListMCPVisibleBrains(ctx, client.UserID)
+	for _, userID := range users {
+		visible, err := u.repository.ListMCPVisibleBrains(ctx, userID)
 		if err == nil && len(visible) > 0 {
-			_, err = u.reader.AccessToken(ctx, client.UserID, sourceIDs(visible))
+			err = u.userReadAccess.Prepare(ctx, userID, sourceIDs(visible))
 		}
 		if err != nil && !errors.Is(err, output_port.ErrReaderNeedsReissue) {
-			failures = append(failures, fmt.Errorf("%s: %w", client.UserID, err))
+			failures = append(failures, fmt.Errorf("%s: %w", userID, err))
 		}
 	}
 	return errors.Join(failures...)
@@ -272,13 +331,13 @@ func (u *mcpUseCase) activeClient(ctx context.Context, clientID string) (entity.
 	return client, nil
 }
 
-func (u *mcpUseCase) createTokenPair(ctx context.Context, clientID, userID string) (input_port.OAuthTokenPair, error) {
+func (u *mcpUseCase) createTokenPair(ctx context.Context, clientID, userID string, writeAllowed bool) (input_port.OAuthTokenPair, error) {
 	now := u.clock.Now()
-	access, refresh, err := u.repository.CreateMCPTokenPair(ctx, clientID, userID, now.Add(mcpAccessTokenTTL), now.Add(mcpRefreshTokenTTL))
+	access, refresh, err := u.repository.CreateMCPTokenPair(ctx, clientID, userID, writeAllowed, now.Add(mcpAccessTokenTTL), now.Add(mcpRefreshTokenTTL))
 	if err != nil {
 		return input_port.OAuthTokenPair{}, fmt.Errorf("create MCP token pair: %w", err)
 	}
-	return input_port.OAuthTokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: mcpAccessTokenTTL}, nil
+	return input_port.OAuthTokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: mcpAccessTokenTTL, WriteAllowed: writeAllowed}, nil
 }
 
 func validPKCEValue(value string) bool {
@@ -301,4 +360,25 @@ func sourceIDs(brains []entity.MCPVisibleBrain) []entity.SourceID {
 		sources[i] = brain.SourceID
 	}
 	return sources
+}
+
+func normalizeMCPScope(scope string) (string, bool) {
+	if scope == "" {
+		return "read write", true
+	}
+	read, write := false, false
+	for _, value := range strings.Fields(scope) {
+		switch value {
+		case "read":
+			read = true
+		case "write":
+			write = true
+		default:
+			return "", false
+		}
+	}
+	if !read {
+		return "", false
+	}
+	return entity.MCPScope(write), true
 }

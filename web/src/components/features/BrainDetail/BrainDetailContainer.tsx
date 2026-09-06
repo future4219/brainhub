@@ -1,20 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 
-import { BrainConnectPresenter } from "@/components/features/BrainDetail/BrainConnectPresenter";
+import { BrainSettingsPresenter } from "@/components/features/BrainDetail/BrainSettingsPresenter";
 import { BrainInvitationsPresenter } from "@/components/features/BrainDetail/BrainInvitationsPresenter";
 import { BrainPagesPresenter } from "@/components/features/BrainDetail/BrainPagesPresenter";
-import type { BrainDetailState, PageSort } from "@/components/features/BrainDetail/types";
+import type {
+  BrainDetailState,
+  PageSort,
+} from "@/components/features/BrainDetail/types";
 import { brainTab, invitationUrl } from "@/config/url";
-import type {
-  Invitation,
-  Role,
-} from "@/entities/access/entity";
-import type { Brain, Page, PublicConfig } from "@/entities/brain/entity";
-import type {
-  CreatedMCPCLIToken,
-  MCPConnection,
-} from "@/entities/mcp/entity";
+import type { Invitation, Role } from "@/entities/access/entity";
+import type { Brain, Page } from "@/entities/brain/entity";
+import { useClipboard } from "@/hooks/useClipboard";
 import { useViewer } from "@/hooks/useViewer";
 import {
   createInvitation,
@@ -22,20 +19,7 @@ import {
   revokeInvitation,
 } from "@/lib/accessApi";
 import { APIError } from "@/lib/api";
-import {
-  getBrain,
-  getPublicConfig,
-  listPages,
-  listPageTypes,
-  reissueWriter,
-} from "@/lib/brainApi";
-import {
-  getMCPConnection,
-  issueMCPClient,
-  issueMCPCLIToken,
-  reissueMCPReader,
-  revokeMCPCLIToken,
-} from "@/lib/mcpApi";
+import { getBrain, listPages, reissueWriter } from "@/lib/brainApi";
 
 export function BrainDetailContainer() {
   const location = useLocation();
@@ -43,33 +27,19 @@ export function BrainDetailContainer() {
   const tab = brainTab(location.search);
   const shell = useViewer();
   const [brain, setBrain] = useState<Brain | null>(null);
-  const [brainError, setBrainError] = useState<"not-found" | "load" | "">(
-    "",
-  );
+  const [brainError, setBrainError] = useState<"not-found" | "load" | "">("");
   const [pages, setPages] = useState<Page[] | null>(null);
   const [pagesError, setPagesError] = useState("");
-  const [canWrite, setCanWrite] = useState(false);
-  const [config, setConfig] = useState<PublicConfig | null>(null);
-  const [connection, setConnection] = useState<MCPConnection | null>(null);
-  const [connectError, setConnectError] = useState("");
-  const [cliTokenLabel, setCLITokenLabel] = useState("");
-  const [createdCLIToken, setCreatedCLIToken] =
-    useState<CreatedMCPCLIToken | null>(null);
-  const [cliTokenSubmitting, setCLITokenSubmitting] = useState(false);
-  const [cliTokenRevoking, setCLITokenRevoking] = useState("");
-  const [cliTokenError, setCLITokenError] = useState("");
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
-  const [inviteAuthorized, setInviteAuthorized] = useState<boolean | null>(null);
+  const [inviteAuthorized, setInviteAuthorized] = useState<boolean | null>(
+    null,
+  );
   const [inviteError, setInviteError] = useState("");
   const [createdLink, setCreatedLink] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [writerReissuing, setWriterReissuing] = useState(false);
   const [writerStatus, setWriterStatus] = useState("");
-  const [readerReissuing, setReaderReissuing] = useState(false);
-  const [readerStatus, setReaderStatus] = useState("");
-  const [copyState, setCopyState] = useState<
-    Record<string, "copied" | "failed">
-  >({});
+  const { copyState, copy } = useClipboard();
   const [selectedType, setSelectedType] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PageSort>("updated");
@@ -99,42 +69,6 @@ export function BrainDetailContainer() {
         ),
       );
   }, [brain?.state, sourceID]);
-
-  useEffect(() => {
-    if (brain?.state !== "ready" || shell.viewer === undefined) return;
-    if (shell.viewer === null) {
-      setCanWrite(false);
-      return;
-    }
-    void listPageTypes(sourceID)
-      .then(() => setCanWrite(true))
-      .catch(() => setCanWrite(false));
-  }, [brain?.state, shell.viewer, sourceID]);
-
-  useEffect(() => {
-    if (tab !== "connect" || brain?.state !== "ready") return;
-    setConnectError("");
-    void getPublicConfig()
-      .then(setConfig)
-      .catch(() =>
-        setConnectError(
-          "接続情報を取得できません。接続を確認して再読み込みしてください。",
-        ),
-      );
-    if (shell.viewer === undefined) return;
-    if (shell.viewer === null) {
-      setConnection(null);
-      return;
-    }
-    setConnection(null);
-    void getMCPConnection()
-      .then(setConnection)
-      .catch(() =>
-        setConnectError(
-          "接続情報を取得できません。接続を確認して再読み込みしてください。",
-        ),
-      );
-  }, [brain?.state, shell.viewer, sourceID, tab]);
 
   useEffect(() => {
     if (
@@ -197,99 +131,16 @@ export function BrainDetailContainer() {
       );
   }, [pages, query, selectedType, sort]);
 
-  async function copy(key: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyState((current) => ({ ...current, [key]: "copied" }));
-    } catch {
-      setCopyState((current) => ({ ...current, [key]: "failed" }));
-    }
-  }
-
-  async function refreshConnection() {
-    setConnection(await getMCPConnection());
-  }
-
-  async function createClient() {
-    setSubmitting(true);
-    setConnectError("");
-    try {
-      await issueMCPClient();
-      await refreshConnection();
-    } catch {
-      setConnectError(
-        "Claude用Client IDを発行できません。状態を確認してもう一度お試しください。",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function createCLIToken() {
-    setCLITokenSubmitting(true);
-    setCLITokenError("");
-    try {
-      const issued = await issueMCPCLIToken(cliTokenLabel);
-      setCreatedCLIToken(issued);
-      setCLITokenLabel("");
-      setCopyState((current) => {
-        const next = { ...current };
-        delete next["cli-token"];
-        return next;
-      });
-      await refreshConnection();
-    } catch {
-      setCLITokenError(
-        "CLI用トークンを発行できません。ラベルを確認して、もう一度発行してください。",
-      );
-    } finally {
-      setCLITokenSubmitting(false);
-    }
-  }
-
-  async function revokeCLIToken(id: string) {
-    setCLITokenRevoking(id);
-    setCLITokenError("");
-    try {
-      await revokeMCPCLIToken(id);
-      if (createdCLIToken?.id === id) setCreatedCLIToken(null);
-      await refreshConnection();
-    } catch {
-      setCLITokenError(
-        "CLI用トークンを失効できません。再読み込みして、もう一度実行してください。",
-      );
-    } finally {
-      setCLITokenRevoking("");
-    }
-  }
-
-  async function reissueReader() {
-    setReaderReissuing(true);
-    setReaderStatus("");
-    try {
-      await reissueMCPReader();
-      await refreshConnection();
-      setReaderStatus("読み取り接続を再発行しました。Claudeからもう一度呼び出してください。");
-    } catch {
-      setReaderStatus(
-        "読み取り接続を再発行できません。表示された理由を確認して、もう一度実行してください。",
-      );
-    } finally {
-      setReaderReissuing(false);
-    }
-  }
-
   async function reissueBrainWriter() {
     setWriterReissuing(true);
     setWriterStatus("");
     try {
       await reissueWriter(sourceID);
-      setWriterStatus("Writer client を再発行しました。ページを書き込めます。");
+      setWriterStatus("脳専用の接続を再発行しました。");
       setBrain(await getBrain(sourceID));
-      setCanWrite(true);
     } catch {
       setWriterStatus(
-        "Writer client を再発行できません。GBrain と暗号鍵の設定を確認してください。",
+        "接続を再発行できませんでした。時間をおいて再試行してください。",
       );
     } finally {
       setWriterReissuing(false);
@@ -353,7 +204,6 @@ export function BrainDetailContainer() {
         detail={detail}
         page={{
           sourceID,
-          canWrite,
           pages,
           error: pagesError,
           typeCounts,
@@ -369,42 +219,17 @@ export function BrainDetailContainer() {
     );
   }
 
-  if (tab === "connect") {
+  if (tab === "settings") {
     return (
-      <BrainConnectPresenter
+      <BrainSettingsPresenter
         shell={shell}
         detail={detail}
-        connection={{
-          sourceID,
-          viewer: shell.viewer,
-          brain,
-          pageCount: pages?.length,
-          config,
-          connection,
-          error: connectError,
-          cliTokenLabel,
-          createdCLIToken,
-          cliTokenSubmitting,
-          cliTokenRevoking,
-          cliTokenError,
-          submitting,
-          readerReissuing,
-          readerStatus,
-          writerReissuing,
-          writerStatus,
-          canReissueWriter:
-            shell.viewer !== null &&
-            shell.viewer !== undefined &&
-            shell.viewer.id === brain?.owner_id,
-          copyState,
-          onCopy: copy,
-          onIssue: createClient,
-          onCLITokenLabel: setCLITokenLabel,
-          onIssueCLIToken: createCLIToken,
-          onRevokeCLIToken: revokeCLIToken,
-          onReissueReader: reissueReader,
-          onReissueWriter: reissueBrainWriter,
-        }}
+        canReissueWriter={
+          shell.viewer?.id === brain?.owner_id && !!shell.viewer
+        }
+        writerReissuing={writerReissuing}
+        writerStatus={writerStatus}
+        onReissueWriter={reissueBrainWriter}
       />
     );
   }

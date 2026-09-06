@@ -40,8 +40,8 @@ export function BrainDetailLayout({
         detail.sourceID,
         detail.tab === "pages"
           ? "ページ"
-          : detail.tab === "connect"
-            ? "接続"
+          : detail.tab === "settings"
+            ? "設定"
             : "招待",
       ]}
       search={search}
@@ -130,12 +130,6 @@ function RepositoryHeader({
         >
           招待
         </Link>
-        <Link
-          className={buttonVariants({ size: "sm" })}
-          to={brainUrl(sourceID, "connect")}
-        >
-          この脳に繋ぐ
-        </Link>
       </div>
     </header>
   );
@@ -153,8 +147,11 @@ function BrainTabs({
   inviteCount?: number;
 }) {
   return (
-    <nav className="mt-6 flex gap-1 border-b border-border" aria-label="脳の画面">
-      {(["pages", "connect", "invites"] as const).map((value) => (
+    <nav
+      className="mt-6 flex gap-1 border-b border-border"
+      aria-label="脳の画面"
+    >
+      {(["pages", "invites", "settings"] as const).map((value) => (
         <Link
           className={cn(
             "flex items-center gap-2 border-b-2 px-3 py-3 text-ui",
@@ -166,7 +163,11 @@ function BrainTabs({
           aria-current={tab === value ? "page" : undefined}
           key={value}
         >
-          {value === "pages" ? "ページ" : value === "connect" ? "接続" : "招待"}
+          {value === "pages"
+            ? "ページ"
+            : value === "settings"
+              ? "設定"
+              : "招待"}
           {value === "pages" && pageCount !== undefined && (
             <span className="rounded-pill bg-surface px-2 font-mono text-xs text-text-secondary">
               {pageCount}

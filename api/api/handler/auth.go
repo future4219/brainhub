@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"time"
@@ -12,8 +10,6 @@ import (
 	"brainhub/api/schema"
 	"brainhub/usecase/input_port"
 )
-
-const maxAuthBodyBytes = 64 << 10
 
 type AuthHandler struct {
 	useCase      input_port.AuthUseCase
@@ -105,21 +101,6 @@ func (h *AuthHandler) clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodyBytes)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
-		return false
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
-		return false
-	}
-	return true
-}
-
 func remoteHost(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err == nil {
@@ -141,10 +122,4 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	default:
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 	}
-}
-
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
 }

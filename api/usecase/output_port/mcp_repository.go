@@ -13,7 +13,7 @@ type MCPRepository interface {
 	FindActiveMCPClientByUserName(context.Context, string, string) (entity.MCPClient, error)
 	CreateMCPAuthorizationCode(context.Context, entity.MCPAuthorizationCode) (string, error)
 	ConsumeMCPAuthorizationCode(context.Context, string, string, string, string, time.Time) (entity.MCPAuthorizationCode, error)
-	CreateMCPTokenPair(context.Context, string, string, time.Time, time.Time) (string, string, error)
+	CreateMCPTokenPair(context.Context, string, string, bool, time.Time, time.Time) (string, string, error)
 	CreateMCPCLIToken(context.Context, entity.MCPToken) (string, error)
 	ListMCPCLITokens(context.Context, string) ([]entity.MCPToken, error)
 	RevokeMCPCLIToken(context.Context, string, string, time.Time) error
