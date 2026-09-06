@@ -1,12 +1,10 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 
-	"brainhub/api/middleware"
 	"brainhub/api/schema"
 	"brainhub/domain/constructor"
 	"brainhub/usecase/input_port"
@@ -27,11 +25,7 @@ func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	viewerID := ""
-	if auth, ok := middleware.Current(r); ok {
-		viewerID = auth.User.ID
-	}
-	pages, err := h.useCase.List(r.Context(), sourceID, viewerID)
+	pages, err := h.useCase.List(r.Context(), sourceID, viewerID(r))
 	if errors.Is(err, input_port.ErrBrainNotFound) {
 		http.Error(w, "brain not found", http.StatusNotFound)
 		return
@@ -47,8 +41,7 @@ func (h *PageHandler) List(w http.ResponseWriter, r *http.Request) {
 		response[i] = schema.PageResponseFromEntity(page)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -63,11 +56,7 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	viewerID := ""
-	if auth, ok := middleware.Current(r); ok {
-		viewerID = auth.User.ID
-	}
-	page, err := h.useCase.Get(r.Context(), sourceID, slug, viewerID)
+	page, err := h.useCase.Get(r.Context(), sourceID, slug, viewerID(r))
 	if errors.Is(err, input_port.ErrBrainNotFound) || errors.Is(err, input_port.ErrPageNotFound) {
 		http.Error(w, "page not found", http.StatusNotFound)
 		return
@@ -78,6 +67,5 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(schema.PageDetailResponseFromEntity(page))
+	writeJSON(w, http.StatusOK, schema.PageDetailResponseFromEntity(page))
 }

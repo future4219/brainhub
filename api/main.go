@@ -45,16 +45,16 @@ func main() {
 	clock := clock.Clock{}
 	ids := ulid.Generator{}
 	repositories := repository.New(pool, clock, ids)
-	writerService, err := gbrain.NewWriterService(
+	sourceAccess, err := gbrain.NewSourceAccessService(
 		configuration.GBrainBaseURL, adminClient, repositories, clock, configuration.WriterCredentialKey,
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := writerService.Backfill(context.Background()); err != nil {
+	if err := sourceAccess.Backfill(context.Background()); err != nil {
 		log.Printf("brain writer backfill incomplete: %v", err)
 	}
-	readerService, err := gbrain.NewReaderService(
+	userReadAccess, err := gbrain.NewUserReadAccessService(
 		configuration.GBrainBaseURL, adminClient, repositories, clock, ids, configuration.WriterCredentialKey,
 	)
 	if err != nil {
@@ -64,11 +64,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, writerService, clock, ids)
+	brainUseCase, err := interactor.NewBrainUseCase(repositories, repositories, repositories, shimClient, client, sourceAccess, clock, ids)
 	if err != nil {
 		log.Fatal(err)
 	}
-	pageUseCase, err := interactor.NewPageUseCase(writerService, repositories, repositories, configuration.PublicPageTypes)
+	pageUseCase, err := interactor.NewPageUseCase(sourceAccess, repositories, repositories, configuration.PublicPageTypes)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, readerService, writerService, clock, ids, configuration.PublicMCPURL)
+	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, userReadAccess, sourceAccess, clock, ids, configuration.PublicMCPURL)
 	if err != nil {
 		log.Fatal(err)
 	}

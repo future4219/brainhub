@@ -74,7 +74,7 @@ type readerIDStub struct{}
 
 func (readerIDStub) New() string { return "reader-row-id" }
 
-func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
+func TestUserReadAccessServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	clientID := "gbrain-reader"
 	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
 		ID: "reader-row", UserID: "user-1", GBrainClientID: &clientID,
@@ -83,7 +83,7 @@ func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	}}
 	admin := &readerAdminStub{rescopeErr: errors.New("admin unavailable")}
 	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("r", 32)))
-	service, err := NewReaderService("http://gbrain.test", admin, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
+	service, err := NewUserReadAccessService("http://gbrain.test", admin, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestReaderServiceFailsClosedWhenRescopeFails(t *testing.T) {
 	}
 }
 
-func TestReaderServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
+func TestUserReadAccessServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
 	clientID := "gbrain-reader"
 	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
 		ID: "reader-row", UserID: "user-1", GBrainClientID: &clientID,
@@ -122,7 +122,7 @@ func TestReaderServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T) {
 	defer server.Close()
 
 	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("r", 32)))
-	service, err := NewReaderService(server.URL, &readerAdminStub{}, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
+	service, err := NewUserReadAccessService(server.URL, &readerAdminStub{}, repository, writerClockStub{time.Now()}, readerIDStub{}, key)
 	if err != nil {
 		t.Fatal(err)
 	}

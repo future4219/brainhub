@@ -10,7 +10,7 @@ import (
 	"brainhub/usecase/output_port"
 )
 
-type WriterService struct {
+type SourceAccessService struct {
 	admin       output_port.GBrainAdmin
 	credentials output_port.BrainWriterClientRepository
 	cipher      *credentialCipher
@@ -23,7 +23,7 @@ type WriterService struct {
 	clients map[string]*Client
 }
 
-func NewWriterService(baseURL string, admin output_port.GBrainAdmin, credentials output_port.BrainWriterClientRepository, clock output_port.Clock, encodedKey string) (*WriterService, error) {
+func NewSourceAccessService(baseURL string, admin output_port.GBrainAdmin, credentials output_port.BrainWriterClientRepository, clock output_port.Clock, encodedKey string) (*SourceAccessService, error) {
 	if baseURL == "" || admin == nil || credentials == nil || clock == nil {
 		return nil, errors.New("all writer service dependencies are required")
 	}
@@ -31,19 +31,19 @@ func NewWriterService(baseURL string, admin output_port.GBrainAdmin, credentials
 	if err != nil {
 		return nil, err
 	}
-	return &WriterService{
+	return &SourceAccessService{
 		baseURL: baseURL, admin: admin, credentials: credentials, cipher: cipher, clock: clock,
 		clients: make(map[string]*Client),
 	}, nil
 }
 
-func (s *WriterService) Provision(ctx context.Context, brainID string, sourceID entity.SourceID) error {
+func (s *SourceAccessService) Provision(ctx context.Context, brainID string, sourceID entity.SourceID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.provision(ctx, brainID, sourceID)
 }
 
-func (s *WriterService) provision(ctx context.Context, brainID string, sourceID entity.SourceID) error {
+func (s *SourceAccessService) provision(ctx context.Context, brainID string, sourceID entity.SourceID) error {
 	stored, err := s.credentials.FindBrainWriterClient(ctx, brainID)
 	if err != nil {
 		return fmt.Errorf("find brain writer client: %w", err)
@@ -99,7 +99,7 @@ func (s *WriterService) provision(ctx context.Context, brainID string, sourceID 
 	return errors.Join(errors.New(reason), markErr)
 }
 
-func (s *WriterService) Reissue(ctx context.Context, brainID string, sourceID entity.SourceID) error {
+func (s *SourceAccessService) Reissue(ctx context.Context, brainID string, sourceID entity.SourceID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stored, err := s.credentials.FindBrainWriterClient(ctx, brainID)
@@ -122,7 +122,7 @@ func (s *WriterService) Reissue(ctx context.Context, brainID string, sourceID en
 	return s.provision(ctx, brainID, sourceID)
 }
 
-func (s *WriterService) Backfill(ctx context.Context) error {
+func (s *SourceAccessService) Backfill(ctx context.Context) error {
 	clients, err := s.credentials.ListIssuingBrainWriterClients(ctx)
 	if err != nil {
 		return fmt.Errorf("list writer clients for backfill: %w", err)
@@ -136,7 +136,7 @@ func (s *WriterService) Backfill(ctx context.Context) error {
 	return errors.Join(failures...)
 }
 
-func (s *WriterService) credentialsFor(ctx context.Context, brainID string, sourceID entity.SourceID) (string, string, error) {
+func (s *SourceAccessService) credentialsFor(ctx context.Context, brainID string, sourceID entity.SourceID) (string, string, error) {
 	stored, err := s.credentials.FindBrainWriterClient(ctx, brainID)
 	if err != nil {
 		return "", "", fmt.Errorf("find brain writer client: %w", err)
@@ -154,10 +154,28 @@ func (s *WriterService) credentialsFor(ctx context.Context, brainID string, sour
 	return *stored.GBrainClientID, secret, nil
 }
 
-func (s *WriterService) AccessToken(ctx context.Context, brainID string, sourceID entity.SourceID) (string, error) {
-	client, err := s.writerClient(ctx, brainID, sourceID)
+func (s *SourceAccessService) AccessToken(ctx context.Context, brainID string, sourceID entity.SourceID) (string, error) {
+	client, err := s.sourceClient(ctx, brainID, sourceID)
 	if err != nil {
 		return "", err
 	}
 	return client.BearerToken(ctx)
+}
+
+func (s *SourceAccessService) sourceClient(ctx context.Context, brainID string, sourceID entity.SourceID) (*Client, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := brainID + ":" + sourceID.String()
+	if client := s.clients[key]; client != nil {
+		return client, nil
+	}
+	clientID, secret, err := s.credentialsFor(ctx, brainID, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	client, err := newClient(s.baseURL, clientID, secret, "read write")
+	if err == nil {
+		s.clients[key] = client
+	}
+	return client, err
 }

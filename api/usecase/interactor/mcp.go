@@ -28,20 +28,20 @@ const (
 )
 
 type mcpUseCase struct {
-	repository output_port.MCPRepository
-	readers    output_port.ReaderClientRepository
-	reader     output_port.BrainReader
-	writer     output_port.MCPWriter
-	clock      output_port.Clock
-	ids        output_port.IDGenerator
-	mcpURL     string
+	repository     output_port.MCPRepository
+	readers        output_port.ReaderClientRepository
+	userReadAccess output_port.UserReadAccess
+	sourceAccess   output_port.SourceAccess
+	clock          output_port.Clock
+	ids            output_port.IDGenerator
+	mcpURL         string
 }
 
-func NewMCPUseCase(repository output_port.MCPRepository, readers output_port.ReaderClientRepository, reader output_port.BrainReader, writer output_port.MCPWriter, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
-	if repository == nil || readers == nil || reader == nil || writer == nil || clock == nil || ids == nil || mcpURL == "" {
+func NewMCPUseCase(repository output_port.MCPRepository, readers output_port.ReaderClientRepository, userReadAccess output_port.UserReadAccess, sourceAccess output_port.SourceAccess, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
+	if repository == nil || readers == nil || userReadAccess == nil || sourceAccess == nil || clock == nil || ids == nil || mcpURL == "" {
 		return nil, errors.New("all MCP dependencies are required")
 	}
-	return &mcpUseCase{repository: repository, readers: readers, reader: reader, writer: writer, clock: clock, ids: ids, mcpURL: mcpURL}, nil
+	return &mcpUseCase{repository: repository, readers: readers, userReadAccess: userReadAccess, sourceAccess: sourceAccess, clock: clock, ids: ids, mcpURL: mcpURL}, nil
 }
 
 func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.MCPConnection, error) {
@@ -273,7 +273,7 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		}
 		for _, brain := range visible {
 			if brain.SourceID.String() == *requestedSource && brain.CanWrite() {
-				upstream, err := u.writer.AccessToken(ctx, brain.ID, brain.SourceID)
+				upstream, err := u.sourceAccess.AccessToken(ctx, brain.ID, brain.SourceID)
 				if err != nil {
 					return input_port.MCPCallAuthorization{}, fmt.Errorf("prepare GBrain writer: %w", err)
 				}
@@ -293,7 +293,7 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		}
 		injected = &value
 	}
-	upstreamToken, err := u.reader.AccessToken(ctx, token.UserID, sources)
+	upstreamToken, err := u.userReadAccess.AccessToken(ctx, token.UserID, sources)
 	if err != nil {
 		return input_port.MCPCallAuthorization{}, fmt.Errorf("prepare GBrain reader: %w", err)
 	}
@@ -305,7 +305,7 @@ func (u *mcpUseCase) ReissueReader(ctx context.Context, userID string) error {
 	if err != nil {
 		return err
 	}
-	return u.reader.Reissue(ctx, userID, sourceIDs(visible))
+	return u.userReadAccess.Reissue(ctx, userID, sourceIDs(visible))
 }
 
 func (u *mcpUseCase) ReconcileReaders(ctx context.Context) error {
@@ -317,7 +317,7 @@ func (u *mcpUseCase) ReconcileReaders(ctx context.Context) error {
 	for _, client := range clients {
 		visible, err := u.repository.ListMCPVisibleBrains(ctx, client.UserID)
 		if err == nil && len(visible) > 0 {
-			_, err = u.reader.AccessToken(ctx, client.UserID, sourceIDs(visible))
+			_, err = u.userReadAccess.AccessToken(ctx, client.UserID, sourceIDs(visible))
 		}
 		if err != nil && !errors.Is(err, output_port.ErrReaderNeedsReissue) {
 			failures = append(failures, fmt.Errorf("%s: %w", client.UserID, err))

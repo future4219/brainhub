@@ -20,6 +20,16 @@ type MembershipRepository interface {
 	ListActiveMembershipsByUser(context.Context, string) ([]entity.Membership, error)
 }
 
+// BrainWriterClientRepository stores the source credential record in Brainhub DB.
+type BrainWriterClientRepository interface {
+	CreateBrainWriterClient(context.Context, entity.BrainWriterClient) error
+	FindBrainWriterClient(context.Context, string) (entity.BrainWriterClient, error)
+	ListIssuingBrainWriterClients(context.Context) ([]entity.BrainWriterClient, error)
+	ActivateBrainWriterClient(context.Context, string, string, []byte, time.Time) (entity.BrainWriterClient, error)
+	MarkBrainWriterClientOrphan(context.Context, string, *string, string) (entity.BrainWriterClient, error)
+	ResetBrainWriterClient(context.Context, string) error
+}
+
 type BrainRepositories interface {
 	BrainRepository
 	MembershipRepository

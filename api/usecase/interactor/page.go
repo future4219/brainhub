@@ -14,14 +14,14 @@ import (
 const DefaultPublicPageTypes = "decision,idea,research,note,concept,analysis,project,report,person,task-list"
 
 type pageUseCase struct {
-	pages       output_port.PageRepository
+	pages       output_port.PageReader
 	brains      output_port.BrainRepository
 	memberships output_port.MembershipRepository
 	publicTypes map[string]struct{}
 }
 
 func NewPageUseCase(
-	pages output_port.PageRepository,
+	pages output_port.PageReader,
 	brains output_port.BrainRepository,
 	memberships output_port.MembershipRepository,
 	publicPageTypes string,

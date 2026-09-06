@@ -19,6 +19,23 @@ AI に実装を任せるときは、このファイルを `AGENTS.md`、`CLAUDE.
 2. GBrainのCLI/APIでできることを、コードで再実装しない
 3. GBrainへの呼び出しは adapter/gbrain の外に一切出さない
 
+## 現在の主要な窓口
+
+`usecase/output_port` は「外部に何を頼むか」を定義し、`adapter` が実装する。
+脳の情報、ページ本文、接続の資格情報を区別して名前を付ける。
+
+| 窓口 | 対象 | 実装 |
+|---|---|---|
+| `BrainRepository` | Brainhub DB内の脳の情報・状態 | `adapter/database/repository` |
+| `PageReader` | GBrainのページ一覧・本文 | `adapter/gbrain/page_reader.go` |
+| `UserReadAccess` | 利用者ごとの複数Source読み取り接続 | `adapter/gbrain/user_read_access.go` |
+| `SourceAccess` | 1つのSource専用接続の発行・復旧・トークン取得 | `adapter/gbrain/source_access.go` |
+
+`SourceAccessService` は `SourceAccess` と `PageReader` の両方を実装する。
+利用者の現在の権限とOAuthの許可は、接続を使う前にusecaseで確認する。
+DBの既存名 `brain_writer_clients`、GBrain上のclient名、HTTPの `/writer/reissue` は互換性のため維持する。
+接続の命名整理だけで保存データや外部契約を変更しない。
+
 ## Architecture Style
 
 このプロジェクトは Clean Architecture を採用する。

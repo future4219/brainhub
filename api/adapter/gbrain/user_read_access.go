@@ -12,7 +12,7 @@ import (
 	"brainhub/usecase/output_port"
 )
 
-type ReaderService struct {
+type UserReadAccessService struct {
 	baseURL    string
 	admin      output_port.GBrainReaderAdmin
 	repository output_port.ReaderClientRepository
@@ -26,7 +26,7 @@ type ReaderService struct {
 	clients map[string]*Client
 }
 
-func NewReaderService(baseURL string, admin output_port.GBrainReaderAdmin, repository output_port.ReaderClientRepository, clock output_port.Clock, ids output_port.IDGenerator, encodedKey string) (*ReaderService, error) {
+func NewUserReadAccessService(baseURL string, admin output_port.GBrainReaderAdmin, repository output_port.ReaderClientRepository, clock output_port.Clock, ids output_port.IDGenerator, encodedKey string) (*UserReadAccessService, error) {
 	if baseURL == "" || admin == nil || repository == nil || clock == nil || ids == nil {
 		return nil, errors.New("all reader service dependencies are required")
 	}
@@ -34,13 +34,13 @@ func NewReaderService(baseURL string, admin output_port.GBrainReaderAdmin, repos
 	if err != nil {
 		return nil, err
 	}
-	return &ReaderService{
+	return &UserReadAccessService{
 		baseURL: baseURL, admin: admin, repository: repository, cipher: cipher,
 		clock: clock, ids: ids, clients: make(map[string]*Client),
 	}, nil
 }
 
-func (s *ReaderService) AccessToken(ctx context.Context, userID string, sources []entity.SourceID) (string, error) {
+func (s *UserReadAccessService) AccessToken(ctx context.Context, userID string, sources []entity.SourceID) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sources = normalizedSources(sources)
@@ -58,7 +58,7 @@ func (s *ReaderService) AccessToken(ctx context.Context, userID string, sources 
 	return client.BearerToken(ctx)
 }
 
-func (s *ReaderService) ensure(ctx context.Context, userID string, sources []entity.SourceID) (entity.ReaderClient, error) {
+func (s *UserReadAccessService) ensure(ctx context.Context, userID string, sources []entity.SourceID) (entity.ReaderClient, error) {
 	stored, err := s.repository.FindReaderClientByUser(ctx, userID)
 	if errors.Is(err, output_port.ErrNotFound) {
 		stored = entity.ReaderClient{
@@ -108,7 +108,7 @@ func (s *ReaderService) ensure(ctx context.Context, userID string, sources []ent
 	}
 }
 
-func (s *ReaderService) provision(ctx context.Context, stored entity.ReaderClient, sources []entity.SourceID) (entity.ReaderClient, error) {
+func (s *UserReadAccessService) provision(ctx context.Context, stored entity.ReaderClient, sources []entity.SourceID) (entity.ReaderClient, error) {
 	primary := sources[0].String()
 	registered, err := s.admin.RegisterClient(ctx, output_port.RegisterGBrainClientInput{
 		Name: "brainhub-reader-" + stored.UserID, Scopes: []string{"read"}, Source: &primary,
@@ -145,7 +145,7 @@ func (s *ReaderService) provision(ctx context.Context, stored entity.ReaderClien
 	return entity.ReaderClient{}, errors.Join(fmt.Errorf("persist reader credentials: %w", err), revokeErr, markErr)
 }
 
-func (s *ReaderService) Reissue(ctx context.Context, userID string, sources []entity.SourceID) error {
+func (s *UserReadAccessService) Reissue(ctx context.Context, userID string, sources []entity.SourceID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sources = normalizedSources(sources)
@@ -177,7 +177,7 @@ func (s *ReaderService) Reissue(ctx context.Context, userID string, sources []en
 	return err
 }
 
-func (s *ReaderService) clientFor(ctx context.Context, stored entity.ReaderClient) (*Client, error) {
+func (s *UserReadAccessService) clientFor(ctx context.Context, stored entity.ReaderClient) (*Client, error) {
 	if stored.GBrainClientID == nil || len(stored.ClientSecretCiphertext) == 0 {
 		return nil, output_port.ErrReaderNeedsReissue
 	}
@@ -197,7 +197,7 @@ func (s *ReaderService) clientFor(ctx context.Context, stored entity.ReaderClien
 	return client, nil
 }
 
-func (s *ReaderService) markOrphan(ctx context.Context, userID string, clientID *string, reason string) error {
+func (s *UserReadAccessService) markOrphan(ctx context.Context, userID string, clientID *string, reason string) error {
 	delete(s.clients, userID)
 	_, err := s.repository.MarkReaderClientOrphan(ctx, userID, clientID, reason)
 	return err

@@ -377,3 +377,11 @@ func (w *mcpWriterMock) AccessToken(_ context.Context, brainID string, source en
 	w.sourceID = source
 	return "gbrain-writer-token", w.err
 }
+
+func (w *mcpWriterMock) Provision(context.Context, string, entity.SourceID) error {
+	panic("unexpected source provisioning during MCP access")
+}
+
+func (w *mcpWriterMock) Reissue(context.Context, string, entity.SourceID) error {
+	panic("unexpected source reissue during MCP access")
+}
