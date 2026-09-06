@@ -28,13 +28,13 @@ export function OAuthConsentPresenter({
 }: OAuthConsentPresenterProps) {
   return (
     <AppShell {...shell} crumbs={["接続を許可"]}>
-      <main className="mx-auto max-w-credentials px-4 pb-20 pt-12 sm:px-8">
+      <main className="mx-auto w-full max-w-copy px-4 pb-20 pt-8 sm:pt-12">
         <header>
           <p className="font-mono text-xs uppercase tracking-section text-text-muted">
             oauth authorization
           </p>
           <h1 className="mt-2 text-title font-semibold tracking-tight">
-            このクライアントに脳へのアクセスを許可しますか
+            Brainhubへの接続を許可しますか
           </h1>
         </header>
 
@@ -60,11 +60,11 @@ export function OAuthConsentPresenter({
           )}
           {error && <Feedback kind="error">{error}</Feedback>}
           {shell.viewer && consent && (
-            <div className="p-4">
+            <div className="p-4 sm:p-6">
               <dl className="space-y-4 text-ui">
                 <div>
                   <dt className="text-text-muted">クライアント</dt>
-                  <dd className="mt-1 font-mono text-text">
+                  <dd className="mt-1 break-words text-section font-semibold text-text">
                     {consent.client_name === "codex"
                       ? "Codex"
                       : consent.client_name}
@@ -79,7 +79,9 @@ export function OAuthConsentPresenter({
                 </div>
                 <div>
                   <dt className="text-text-muted">書き込み</dt>
-                  <dd className="mt-1 text-text">許可しない</dd>
+                  <dd className="mt-1 text-text-secondary">
+                    この接続は読み取り専用です。ページの作成・変更はできません。
+                  </dd>
                 </div>
               </dl>
               <h2 className="mt-6 text-body font-semibold">現在読める脳</h2>
@@ -90,20 +92,27 @@ export function OAuthConsentPresenter({
               ) : (
                 <ul className="mt-2 divide-y divide-divider">
                   {consent.visible_brains.map((brain) => (
-                    <li key={brain.source_id} className="py-3 text-ui">
-                      <span className="font-semibold">{brain.name}</span>
-                      <span className="ml-2 font-mono text-xs text-text-muted">
-                        {brain.source_id}
+                    <li
+                      key={brain.source_id}
+                      className="flex items-center justify-between gap-4 py-3 text-ui"
+                    >
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold">{brain.name}</p>
+                        <p className="mt-1 break-all font-mono text-xs text-text-muted">
+                          {brain.source_id}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-badge border border-border-control px-2 py-1 text-xs text-text-secondary">
+                        読み取り
                       </span>
-                      <span className="ml-2 text-text-secondary">読み取り</span>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="mt-4 text-ui text-text-secondary">
+              <p className="mt-4 border-t border-border pt-4 text-ui text-text-secondary">
                 許可すると接続元のAIに戻ります。
               </p>
-              <div className="mt-6 flex gap-2">
+              <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
                 <Button type="button" disabled={submitting} onClick={onApprove}>
                   {submitting ? "処理中…" : "許可する"}
                 </Button>
