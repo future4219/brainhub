@@ -8,14 +8,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	"brainhub/usecase/input_port"
 )
 
 // The upstream reader catalog stays authoritative. Brainhub adds only the
 // source-bound page write it authorizes; source administration stays unavailable.
 func appendMCPWriteTool(response *http.Response) error {
-	sources := input_port.MCPWritableSources(response.Request.Context())
+	sources := writableCatalogSources(response.Request)
 	if len(sources) == 0 || response.StatusCode != http.StatusOK {
 		return nil
 	}

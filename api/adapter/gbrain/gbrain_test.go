@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"brainhub/domain/entity"
+	"brainhub/usecase/input_port"
 	"brainhub/usecase/output_port"
 )
 
@@ -274,7 +275,7 @@ func TestProxyForwardsRequestAndFlushesSSE(t *testing.T) {
 		if r.Method != http.MethodPatch || r.URL.RequestURI() != "/mcp/stream?x=1" {
 			t.Errorf("method/path = %s %s", r.Method, r.URL.RequestURI())
 		}
-		if r.Header.Get("Authorization") != "Bearer caller-token" || r.Header.Get("X-Test") != "unchanged" {
+		if r.Header.Get("Authorization") != "Bearer reader-token" || r.Header.Get("X-Test") != "unchanged" {
 			t.Errorf("forwarded headers = %v", r.Header)
 		}
 		body, _ := io.ReadAll(r.Body)
@@ -290,11 +291,16 @@ func TestProxyForwardsRequestAndFlushesSSE(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	proxy, err := NewProxy(upstream.URL)
+	proxy, err := NewProxy(upstream.URL, proxyReaderStub{}, proxyWriterStub{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(proxy)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(input_port.WithAuthorizedMCPRequest(r.Context(), input_port.AuthorizedMCPRequest{
+			Authorization: input_port.MCPCallAuthorization{UserID: "user", ReadableSources: []entity.SourceID{"brain-a"}},
+		}))
+		proxy.ServeHTTP(w, r)
+	}))
 	defer server.Close()
 
 	request, err := http.NewRequest(http.MethodPatch, server.URL+"/mcp/stream?x=1", bytes.NewReader([]byte("raw-body")))

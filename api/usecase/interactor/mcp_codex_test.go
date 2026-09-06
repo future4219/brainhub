@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"brainhub/adapter/gbrain"
 	"brainhub/api/router"
 	"brainhub/domain/entity"
 	"brainhub/usecase/input_port"
@@ -35,16 +36,21 @@ func TestCodexBrowserOAuthFlow(t *testing.T) {
 			repo := newMCPRepositoryMock()
 			repo.visible = []entity.MCPVisibleBrain{{SourceID: "my-brain", Name: "My brain", Role: "owner", State: "ready"}}
 			reader := &brainReaderMock{}
-			uc, err := interactor.NewMCPUseCase(repo, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
+			uc, err := interactor.NewMCPUseCase(repo, reader, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
 			if err != nil {
 				t.Fatal(err)
 			}
 			upstreamCalled := false
-			routes, err := router.New(nil, nil, codexSessionAuth{}, nil, uc, origin+"/mcp", origin,
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					upstreamCalled = r.Header.Get("Authorization") == "Bearer gbrain-reader-token"
-					w.WriteHeader(http.StatusOK)
-				}), false)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				upstreamCalled = r.Header.Get("Authorization") == "Bearer gbrain-reader-token"
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer upstream.Close()
+			proxy, err := gbrain.NewProxy(upstream.URL, reader, &mcpWriterMock{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			routes, err := router.New(nil, nil, codexSessionAuth{}, nil, uc, origin+"/mcp", origin, proxy, false)
 			if err != nil {
 				t.Fatal(err)
 			}

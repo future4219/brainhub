@@ -36,12 +36,15 @@ func TestMCPWriteConsentAndSourceBoundary(t *testing.T) {
 				{ID: "broken-id", SourceID: "broken", Role: "owner", State: "degraded"},
 			}
 			writer := &mcpWriterMock{}
-			uc, err := interactor.NewMCPUseCase(repo, &readerRepositoryMock{}, &brainReaderMock{}, writer, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
+			reader := &brainReaderMock{}
+			uc, err := interactor.NewMCPUseCase(repo, reader, fixedClock{now}, &sequenceIDs{}, origin+"/mcp")
 			if err != nil {
 				t.Fatal(err)
 			}
 			writes := 0
+			requests := 0
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
 				var req map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Error(err)
@@ -82,7 +85,7 @@ func TestMCPWriteConsentAndSourceBoundary(t *testing.T) {
 				}
 			}))
 			defer upstream.Close()
-			proxy, _ := gbrain.NewProxy(upstream.URL)
+			proxy, _ := gbrain.NewProxy(upstream.URL, reader, writer)
 			routes, err := router.New(nil, nil, codexSessionAuth{}, nil, uc, origin+"/mcp", origin, proxy, false)
 			if err != nil {
 				t.Fatal(err)
@@ -146,6 +149,7 @@ func TestMCPWriteConsentAndSourceBoundary(t *testing.T) {
 				}
 				for _, source := range []any{"own", "editable", "reader", "public", "broken", "foreign", "__all__", "", nil, 42} {
 					before := writes
+					beforeRequests, beforeWriterCalls := requests, writer.calls
 					args := map[string]any{"slug": "notes/example", "content": "---\ntitle: Example\n---\nSaved"}
 					if source != nil {
 						args["source_id"] = source
@@ -156,7 +160,10 @@ func TestMCPWriteConsentAndSourceBoundary(t *testing.T) {
 					if (writes == before+1) != wantWrite {
 						t.Fatalf("scope %s source %v: %d %s", tc.want, source, w.Code, w.Body.String())
 					}
-					if wantWrite && writer.sourceID.String() != source {
+					if !wantWrite && (requests != beforeRequests || writer.calls != beforeWriterCalls) {
+						t.Fatal("denied write reached credential provider or upstream")
+					}
+					if wantWrite && (writer.sourceID.String() != source || writer.brainID != map[string]string{"own": "own-id", "editable": "edit-id"}[source.(string)]) {
 						t.Fatal("wrong source writer")
 					}
 					if !wantWrite && !strings.Contains(w.Body.String(), "permission_denied") {
@@ -180,6 +187,15 @@ func TestMCPWriteConsentAndSourceBoundary(t *testing.T) {
 			}
 			// Management operations continue through read credentials only.
 			request("POST", "/mcp", `{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"sources_add","arguments":{"id":"new"}}}`, "brainhub-access", false)
+			// Revoked membership plus failed native rescope must never reach upstream.
+			repo.visible = repo.visible[1:]
+			reader.err = errors.New("rescope failed")
+			beforeRequests := requests
+			w = request("POST", "/mcp", `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search","arguments":{"query":"private"}}}`, "brainhub-access", false)
+			if w.Code != http.StatusServiceUnavailable || requests != beforeRequests || len(reader.sources) != len(repo.visible) || reader.sources[0] != "editable" {
+				t.Fatalf("failed rescope was forwarded: %d %s", w.Code, w.Body.String())
+			}
+
 		})
 	}
 }

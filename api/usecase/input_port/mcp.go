@@ -26,7 +26,7 @@ type MCPConnection struct {
 	CodexClient   *entity.MCPClient
 	CLITokens     []entity.MCPToken
 	VisibleBrains []entity.MCPVisibleBrain
-	Reader        *entity.ReaderClient
+	Reader        *entity.ReadConnectionStatus
 }
 
 type IssuedCLIToken struct {
@@ -57,11 +57,19 @@ type OAuthTokenPair struct {
 	ExpiresIn    time.Duration
 }
 
+// MCPCallAuthorization contains current Brainhub permissions, never upstream secrets.
 type MCPCallAuthorization struct {
+	UserID          string
+	ToolName        string
+	ReadableSources []entity.SourceID
 	WritableSources []string
-	StripSource     bool
-	GBrainToken     string
 	SourceID        *string
+	WriteTarget     *MCPWriteTarget
+}
+
+type MCPWriteTarget struct {
+	BrainID  string
+	SourceID entity.SourceID
 }
 
 type MCPUseCase interface {
@@ -79,12 +87,20 @@ type MCPUseCase interface {
 	ReconcileReaders(context.Context) error
 }
 
-type mcpCatalogContextKey struct{}
-
-func WithMCPWritableSources(ctx context.Context, sources []string) context.Context {
-	return context.WithValue(ctx, mcpCatalogContextKey{}, sources)
+// AuthorizedMCPRequest binds the parsed request to its server-side authorization.
+// It is passed directly to the GBrain adapter, never accepted from HTTP headers.
+type AuthorizedMCPRequest struct {
+	Request       map[string]any
+	Authorization MCPCallAuthorization
 }
-func MCPWritableSources(ctx context.Context) []string {
-	sources, _ := ctx.Value(mcpCatalogContextKey{}).([]string)
-	return sources
+
+type mcpRequestContextKey struct{}
+
+func WithAuthorizedMCPRequest(ctx context.Context, request AuthorizedMCPRequest) context.Context {
+	return context.WithValue(ctx, mcpRequestContextKey{}, request)
+}
+
+func MCPRequestFromContext(ctx context.Context) (AuthorizedMCPRequest, bool) {
+	request, ok := ctx.Value(mcpRequestContextKey{}).(AuthorizedMCPRequest)
+	return request, ok
 }

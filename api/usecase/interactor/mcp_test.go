@@ -127,32 +127,8 @@ func (r *mcpRepositoryMock) ListMCPVisibleBrains(context.Context, string) ([]ent
 	return append([]entity.MCPVisibleBrain(nil), r.visible...), nil
 }
 
-type readerRepositoryMock struct{ client *entity.ReaderClient }
-
-func (r *readerRepositoryMock) CreateReaderClient(context.Context, entity.ReaderClient) error {
-	return nil
-}
-func (r *readerRepositoryMock) FindReaderClientByUser(context.Context, string) (entity.ReaderClient, error) {
-	if r.client == nil {
-		return entity.ReaderClient{}, output_port.ErrNotFound
-	}
-	return *r.client, nil
-}
-func (r *readerRepositoryMock) ListReaderClients(context.Context) ([]entity.ReaderClient, error) {
-	return nil, nil
-}
-func (r *readerRepositoryMock) ActivateReaderClient(context.Context, string, string, []byte, []entity.SourceID, time.Time) (entity.ReaderClient, error) {
-	return entity.ReaderClient{}, nil
-}
-func (r *readerRepositoryMock) UpdateReaderClientScope(context.Context, string, []entity.SourceID, time.Time) (entity.ReaderClient, error) {
-	return entity.ReaderClient{}, nil
-}
-func (r *readerRepositoryMock) MarkReaderClientOrphan(context.Context, string, *string, string) (entity.ReaderClient, error) {
-	return entity.ReaderClient{}, nil
-}
-func (r *readerRepositoryMock) ResetReaderClient(context.Context, string) error { return nil }
-
 type brainReaderMock struct {
+	users   []string
 	sources []entity.SourceID
 	calls   int
 	err     error
@@ -163,14 +139,21 @@ func (r *brainReaderMock) AccessToken(_ context.Context, _ string, sources []ent
 	r.sources = append([]entity.SourceID(nil), sources...)
 	return "gbrain-reader-token", r.err
 }
+func (r *brainReaderMock) Status(context.Context, string) (*entity.ReadConnectionStatus, error) {
+	return nil, nil
+}
+func (r *brainReaderMock) ConnectedUsers(context.Context) ([]string, error) { return r.users, nil }
+func (r *brainReaderMock) Prepare(ctx context.Context, user string, sources []entity.SourceID) error {
+	_, err := r.AccessToken(ctx, user, sources)
+	return err
+}
 func (r *brainReaderMock) Reissue(context.Context, string, []entity.SourceID) error { return nil }
 
 func TestMCPOAuthPKCEIsOneTimeAndIssuesHashedRepositoryTokens(t *testing.T) {
 	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
-	readerRepository := &readerRepositoryMock{}
 	reader := &brainReaderMock{}
-	useCase, err := interactor.NewMCPUseCase(repository, readerRepository, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, err := interactor.NewMCPUseCase(repository, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +184,7 @@ func TestMCPOAuthPKCEIsOneTimeAndIssuesHashedRepositoryTokens(t *testing.T) {
 func TestMCPCLITokenLifecycleUsesNinetyDayExpiry(t *testing.T) {
 	now := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, _ := interactor.NewMCPUseCase(repository, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	issued, err := useCase.IssueCLIToken(context.Background(), "user-1", "  codex  ")
 	if err != nil || issued.RawToken != "brainhub-cli" || issued.Token.Type != entity.MCPTokenCLI {
 		t.Fatalf("issued = %+v %v", issued, err)
@@ -233,7 +216,7 @@ func TestMCPCLITokenLifecycleUsesNinetyDayExpiry(t *testing.T) {
 func TestMCPOAuthRejectsNonASCIIAndNonS256PKCE(t *testing.T) {
 	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, _ := interactor.NewMCPUseCase(repository, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	client, err := useCase.IssueClient(context.Background(), "user-1", "claude-web")
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +245,7 @@ func TestMCPAuthorizationUsesCurrentVisibilityAndRejectsForeignSourceBeforeGBrai
 		{SourceID: "public-other", Role: "public"},
 	}
 	reader := &brainReaderMock{}
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, _ := interactor.NewMCPUseCase(repository, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	foreign := "private-foreign"
 	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "get_page", &foreign); !errors.Is(err, input_port.ErrMCPForbidden) {
 		t.Fatalf("foreign source error = %v; want forbidden", err)
@@ -274,8 +257,8 @@ func TestMCPAuthorizationUsesCurrentVisibilityAndRejectsForeignSourceBeforeGBrai
 	if err != nil || authorized.SourceID == nil || *authorized.SourceID != "__all__" {
 		t.Fatalf("authorized = %+v %v", authorized, err)
 	}
-	if len(reader.sources) != 2 || reader.sources[1] != "public-other" {
-		t.Fatalf("reader sources = %v", reader.sources)
+	if len(authorized.ReadableSources) != 2 || authorized.ReadableSources[1] != "public-other" {
+		t.Fatalf("reader sources = %v", authorized.ReadableSources)
 	}
 }
 
@@ -298,13 +281,13 @@ func TestMCPCLITokenMatchesOAuthAuthorizationAndReflectsMembershipRevokeImmediat
 			repository.token = entity.MCPToken{Type: tc.type_, UserID: "user-1", ExpiresAt: now.Add(time.Hour)}
 			repository.visible = append([]entity.MCPVisibleBrain(nil), visible...)
 			reader := &brainReaderMock{}
-			useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+			useCase, _ := interactor.NewMCPUseCase(repository, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 			authorized, err := useCase.AuthorizeCall(context.Background(), tc.raw, "list_pages", nil)
-			if err != nil || authorized.SourceID == nil || *authorized.SourceID != "__all__" || authorized.GBrainToken != "gbrain-reader-token" {
+			if err != nil || authorized.SourceID == nil || *authorized.SourceID != "__all__" || authorized.UserID != "user-1" {
 				t.Fatalf("authorization = %+v %v", authorized, err)
 			}
-			if len(reader.sources) != 2 || reader.sources[0] != "private-own" || reader.sources[1] != "public-other" {
-				t.Fatalf("reader sources = %v", reader.sources)
+			if len(authorized.ReadableSources) != 2 || authorized.ReadableSources[0] != "private-own" || authorized.ReadableSources[1] != "public-other" {
+				t.Fatalf("reader sources = %v", authorized.ReadableSources)
 			}
 			if tc.type_ == entity.MCPTokenCLI {
 				repository.visible = visible[1:]
@@ -321,22 +304,9 @@ func TestMCPExpiredCLITokenHasSpecificUnauthorizedReason(t *testing.T) {
 	now := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
 	repository := newMCPRepositoryMock()
 	repository.token = entity.MCPToken{Type: entity.MCPTokenCLI, UserID: "user-1", ExpiresAt: now}
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, &brainReaderMock{}, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, _ := interactor.NewMCPUseCase(repository, &brainReaderMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-cli", "list_pages", nil); !errors.Is(err, input_port.ErrMCPTokenExpired) {
 		t.Fatalf("expired token error = %v", err)
-	}
-}
-
-func TestMCPAuthorizationFailsClosedWhenReaderRescopeFails(t *testing.T) {
-	now := time.Date(2026, 8, 30, 0, 0, 0, 0, time.UTC)
-	repository := newMCPRepositoryMock()
-	repository.token = entity.MCPToken{Type: entity.MCPTokenAccess, UserID: "user-1", ExpiresAt: now.Add(time.Hour)}
-	repository.visible = []entity.MCPVisibleBrain{{SourceID: "brain-a", Role: "owner"}}
-	reader := &brainReaderMock{err: errors.New("rescope failed")}
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
-	authorized, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "get_chunks", nil)
-	if err == nil || authorized.GBrainToken != "" {
-		t.Fatalf("authorization = %+v %v; want no upstream token", authorized, err)
 	}
 }
 
@@ -346,21 +316,22 @@ func TestMCPSearchUsesCurrentVisibilityWithoutSourceInjection(t *testing.T) {
 	repository.token = entity.MCPToken{Type: entity.MCPTokenAccess, UserID: "user-1", ExpiresAt: now.Add(time.Hour)}
 	repository.visible = []entity.MCPVisibleBrain{{SourceID: "brain-a"}, {SourceID: "brain-b"}}
 	reader := &brainReaderMock{}
-	useCase, _ := interactor.NewMCPUseCase(repository, &readerRepositoryMock{}, reader, &mcpWriterMock{}, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	useCase, _ := interactor.NewMCPUseCase(repository, reader, fixedClock{now}, &sequenceIDs{}, "https://brainhub.example/mcp")
 	authorized, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil)
-	if err != nil || authorized.GBrainToken != "gbrain-reader-token" || authorized.SourceID != nil {
+	if err != nil || authorized.UserID != "user-1" || authorized.SourceID != nil {
 		t.Fatalf("authorization = %+v %v", authorized, err)
 	}
-	if reader.calls != 1 || len(reader.sources) != 2 || reader.sources[0] != "brain-a" || reader.sources[1] != "brain-b" {
-		t.Fatalf("reader calls/sources = %d %v", reader.calls, reader.sources)
+	if reader.calls != 0 || len(authorized.ReadableSources) != 2 || authorized.ReadableSources[0] != "brain-a" || authorized.ReadableSources[1] != "brain-b" {
+		t.Fatalf("reader calls/sources = %d %v", reader.calls, authorized.ReadableSources)
 	}
 
 	repository.visible = repository.visible[:1]
-	if _, err := useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil); err != nil {
+	authorized, err = useCase.AuthorizeCall(context.Background(), "brainhub-access", "search", nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if reader.calls != 2 || len(reader.sources) != 1 || reader.sources[0] != "brain-a" {
-		t.Fatalf("reader calls/sources after revoke = %d %v", reader.calls, reader.sources)
+	if reader.calls != 0 || len(authorized.ReadableSources) != 1 || authorized.ReadableSources[0] != "brain-a" {
+		t.Fatalf("reader calls/sources after revoke = %d %v", reader.calls, authorized.ReadableSources)
 	}
 }
 
@@ -378,10 +349,28 @@ func (w *mcpWriterMock) AccessToken(_ context.Context, brainID string, source en
 	return "gbrain-writer-token", w.err
 }
 
-func (w *mcpWriterMock) Provision(context.Context, string, entity.SourceID) error {
-	panic("unexpected source provisioning during MCP access")
-}
-
-func (w *mcpWriterMock) Reissue(context.Context, string, entity.SourceID) error {
-	panic("unexpected source reissue during MCP access")
+func TestReaderReconciliationPreparesCurrentVisibilityAndPreservesRecovery(t *testing.T) {
+	repository := newMCPRepositoryMock()
+	repository.visible = []entity.MCPVisibleBrain{{SourceID: "current"}}
+	reader := &brainReaderMock{users: []string{"user-1"}}
+	useCase, err := interactor.NewMCPUseCase(repository, reader, fixedClock{time.Now()}, &sequenceIDs{}, "https://brainhub.example/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := useCase.ReconcileReaders(context.Background()); err != nil || reader.calls != 1 || len(reader.sources) != 1 || reader.sources[0] != "current" {
+		t.Fatalf("prepare = %v %v", reader.sources, err)
+	}
+	reader.err = output_port.ErrReaderNeedsReissue
+	if err := useCase.ReconcileReaders(context.Background()); err != nil {
+		t.Fatalf("manual recovery should remain pending: %v", err)
+	}
+	reader.err = errors.New("rescope unavailable")
+	if err := useCase.ReconcileReaders(context.Background()); !errors.Is(err, reader.err) {
+		t.Fatalf("lost startup failure: %v", err)
+	}
+	repository.visible = nil
+	calls := reader.calls
+	if err := useCase.ReconcileReaders(context.Background()); err != nil || reader.calls != calls {
+		t.Fatal("empty visibility must not provision a connection at startup")
+	}
 }

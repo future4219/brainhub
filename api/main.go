@@ -32,10 +32,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	pool, err := database.Open(context.Background(), configuration.DatabaseURL)
 	if err != nil {
@@ -61,6 +57,10 @@ func main() {
 		log.Fatal(err)
 	}
 	shimClient, err := gbrain.NewShimClient(configuration.ShimURL, configuration.ShimToken)
+	if err != nil {
+		log.Fatal(err)
+	}
+	proxy, err := gbrain.NewProxy(configuration.GBrainBaseURL, userReadAccess, sourceAccess)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mcpUseCase, err := interactor.NewMCPUseCase(repositories, repositories, userReadAccess, sourceAccess, clock, ids, configuration.PublicMCPURL)
+	mcpUseCase, err := interactor.NewMCPUseCase(repositories, userReadAccess, clock, ids, configuration.PublicMCPURL)
 	if err != nil {
 		log.Fatal(err)
 	}

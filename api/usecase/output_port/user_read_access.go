@@ -8,6 +8,8 @@ import (
 
 // UserReadAccess maintains a user-specific read grant across visible sources.
 type UserReadAccess interface {
-	AccessToken(ctx context.Context, userID string, sources []entity.SourceID) (string, error)
+	Status(ctx context.Context, userID string) (*entity.ReadConnectionStatus, error)
+	ConnectedUsers(ctx context.Context) ([]string, error)
+	Prepare(ctx context.Context, userID string, sources []entity.SourceID) error
 	Reissue(ctx context.Context, userID string, sources []entity.SourceID) error
 }

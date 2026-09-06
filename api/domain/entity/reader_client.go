@@ -21,3 +21,9 @@ type ReaderClient struct {
 	IssuedAt               *time.Time
 	LastVerifiedAt         *time.Time
 }
+
+// ReadConnectionStatus is the non-secret state shown in connection settings.
+type ReadConnectionStatus struct {
+	State       ReaderClientState
+	StateReason string
+}

@@ -127,10 +127,6 @@ func (w *writerMock) Reissue(_ context.Context, _ string, sourceID entity.Source
 	return w.err
 }
 
-func (w *writerMock) AccessToken(context.Context, string, entity.SourceID) (string, error) {
-	panic("unexpected token request during source provisioning")
-}
-
 func (p *provisionerMock) Provision(_ context.Context, sourceID entity.SourceID) error {
 	p.calls = append(p.calls, sourceID)
 	return p.err

@@ -136,35 +136,13 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "MCP connection is unavailable; open brainhub connection settings and follow the recovery message", http.StatusServiceUnavailable)
 		return
 	}
-	if authorization.SourceID != nil || authorization.StripSource {
-		params, _ := request["params"].(map[string]any)
-		arguments, _ := params["arguments"].(map[string]any)
-		if arguments == nil {
-			arguments = make(map[string]any)
-			params["arguments"] = arguments
-		}
-		if authorization.StripSource {
-			delete(arguments, "source_id")
-		} else {
-			arguments["source_id"] = *authorization.SourceID
-		}
-		var marshalErr error
-		body, marshalErr = json.Marshal(request)
-		if marshalErr != nil {
-			http.Error(w, "failed to prepare MCP request", http.StatusInternalServerError)
-			return
-		}
-	}
-	if request["method"] == "tools/list" {
-		r = r.WithContext(input_port.WithMCPWritableSources(r.Context(), authorization.WritableSources))
-	}
+	r = r.WithContext(input_port.WithAuthorizedMCPRequest(r.Context(), input_port.AuthorizedMCPRequest{
+		Request: request, Authorization: authorization,
+	}))
 	if r.Method == http.MethodPost {
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		r.ContentLength = int64(len(body))
 	}
-	// The caller's brainhub token is never valid at GBrain. Forward only the
-	// reader or source-bound writer authorized against current Membership.
-	r.Header.Set("Authorization", "Bearer "+authorization.GBrainToken)
 	h.proxy.ServeHTTP(w, r)
 }
 

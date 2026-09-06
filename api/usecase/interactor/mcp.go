@@ -29,19 +29,17 @@ const (
 
 type mcpUseCase struct {
 	repository     output_port.MCPRepository
-	readers        output_port.ReaderClientRepository
 	userReadAccess output_port.UserReadAccess
-	sourceAccess   output_port.SourceAccess
 	clock          output_port.Clock
 	ids            output_port.IDGenerator
 	mcpURL         string
 }
 
-func NewMCPUseCase(repository output_port.MCPRepository, readers output_port.ReaderClientRepository, userReadAccess output_port.UserReadAccess, sourceAccess output_port.SourceAccess, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
-	if repository == nil || readers == nil || userReadAccess == nil || sourceAccess == nil || clock == nil || ids == nil || mcpURL == "" {
+func NewMCPUseCase(repository output_port.MCPRepository, userReadAccess output_port.UserReadAccess, clock output_port.Clock, ids output_port.IDGenerator, mcpURL string) (input_port.MCPUseCase, error) {
+	if repository == nil || userReadAccess == nil || clock == nil || ids == nil || mcpURL == "" {
 		return nil, errors.New("all MCP dependencies are required")
 	}
-	return &mcpUseCase{repository: repository, readers: readers, userReadAccess: userReadAccess, sourceAccess: sourceAccess, clock: clock, ids: ids, mcpURL: mcpURL}, nil
+	return &mcpUseCase{repository: repository, userReadAccess: userReadAccess, clock: clock, ids: ids, mcpURL: mcpURL}, nil
 }
 
 func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.MCPConnection, error) {
@@ -66,11 +64,9 @@ func (u *mcpUseCase) Connection(ctx context.Context, userID string) (input_port.
 	if err != nil {
 		return connection, fmt.Errorf("list MCP CLI tokens: %w", err)
 	}
-	reader, err := u.readers.FindReaderClientByUser(ctx, userID)
-	if err == nil {
-		connection.Reader = &reader
-	} else if !errors.Is(err, output_port.ErrNotFound) {
-		return connection, fmt.Errorf("find reader client: %w", err)
+	connection.Reader, err = u.userReadAccess.Status(ctx, userID)
+	if err != nil {
+		return connection, fmt.Errorf("find read connection: %w", err)
 	}
 	return connection, nil
 }
@@ -257,8 +253,8 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		sources[i] = brain.SourceID
 		allowed[brain.SourceID.String()] = struct{}{}
 	}
-	// Only this page operation receives a writer token. All other operations
-	// continue through the read-only upstream grant, including source management.
+	// Only page writes get an explicit write target. Source management and all
+	// other operations retain read-only permissions.
 	writable := make([]string, 0)
 	if token.WriteAllowed {
 		for _, brain := range visible {
@@ -273,11 +269,10 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		}
 		for _, brain := range visible {
 			if brain.SourceID.String() == *requestedSource && brain.CanWrite() {
-				upstream, err := u.sourceAccess.AccessToken(ctx, brain.ID, brain.SourceID)
-				if err != nil {
-					return input_port.MCPCallAuthorization{}, fmt.Errorf("prepare GBrain writer: %w", err)
-				}
-				return input_port.MCPCallAuthorization{GBrainToken: upstream, StripSource: true}, nil
+				return input_port.MCPCallAuthorization{
+					UserID: token.UserID, ToolName: toolName,
+					WriteTarget: &input_port.MCPWriteTarget{BrainID: brain.ID, SourceID: brain.SourceID},
+				}, nil
 			}
 		}
 		return input_port.MCPCallAuthorization{}, input_port.ErrMCPForbidden
@@ -293,11 +288,10 @@ func (u *mcpUseCase) AuthorizeCall(ctx context.Context, rawToken, toolName strin
 		}
 		injected = &value
 	}
-	upstreamToken, err := u.userReadAccess.AccessToken(ctx, token.UserID, sources)
-	if err != nil {
-		return input_port.MCPCallAuthorization{}, fmt.Errorf("prepare GBrain reader: %w", err)
-	}
-	return input_port.MCPCallAuthorization{GBrainToken: upstreamToken, SourceID: injected, WritableSources: writable}, nil
+	return input_port.MCPCallAuthorization{
+		UserID: token.UserID, ToolName: toolName, ReadableSources: sources,
+		SourceID: injected, WritableSources: writable,
+	}, nil
 }
 
 func (u *mcpUseCase) ReissueReader(ctx context.Context, userID string) error {
@@ -309,18 +303,18 @@ func (u *mcpUseCase) ReissueReader(ctx context.Context, userID string) error {
 }
 
 func (u *mcpUseCase) ReconcileReaders(ctx context.Context) error {
-	clients, err := u.readers.ListReaderClients(ctx)
+	users, err := u.userReadAccess.ConnectedUsers(ctx)
 	if err != nil {
 		return err
 	}
 	var failures []error
-	for _, client := range clients {
-		visible, err := u.repository.ListMCPVisibleBrains(ctx, client.UserID)
+	for _, userID := range users {
+		visible, err := u.repository.ListMCPVisibleBrains(ctx, userID)
 		if err == nil && len(visible) > 0 {
-			_, err = u.userReadAccess.AccessToken(ctx, client.UserID, sourceIDs(visible))
+			err = u.userReadAccess.Prepare(ctx, userID, sourceIDs(visible))
 		}
 		if err != nil && !errors.Is(err, output_port.ErrReaderNeedsReissue) {
-			failures = append(failures, fmt.Errorf("%s: %w", client.UserID, err))
+			failures = append(failures, fmt.Errorf("%s: %w", userID, err))
 		}
 	}
 	return errors.Join(failures...)

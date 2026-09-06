@@ -161,7 +161,7 @@ func (u *mcpUseCase) AuthorizeCall(_ context.Context, token, _ string, _ *string
 	if token != "access-token" {
 		return input_port.MCPCallAuthorization{}, input_port.ErrMCPUnauthorized
 	}
-	return input_port.MCPCallAuthorization{GBrainToken: "gbrain-token"}, nil
+	return input_port.MCPCallAuthorization{UserID: "user-1"}, nil
 }
 
 func (u *mcpUseCase) ReissueReader(context.Context, string) error { return nil }

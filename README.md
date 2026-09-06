@@ -201,6 +201,8 @@ Webはページの閲覧に対応し、ページの作成・編集画面とREST�
 
 認証・トークン・読み書きの許可の仕組みは[鍵とアクセス許可の入門](docs/mcp-access.md)を参照。
 
+内部のGBrain接続は `api/adapter/gbrain` にまとめる。通常のMCP usecaseは利用者と権限だけを判断し、handlerは認可済み要求を渡す。GBrain用の鍵取得・引数変換・ヘッダー差し替えを上位へ持ち出さない。残す互換処理の理由は[依存契約](docs/gbrain-contract.md)を参照。
+
 MCPの書き込みは `put_page` によるページの作成・更新に対応する。`source_id` を必須とし、呼び出すたびに接続の書き込み許可と対象脳の現在のowner/editor権限、ready状態を確認する。その脳に固定した既存writer clientでGBrainを呼び、GBrainが受け付けない `source_id` は転送前に取り除く。読み取りは従来の利用者別readerで行う。脳の作成・削除やその他の管理操作は公開しない。手動CLIトークンは引き続き読み取り専用。
 
 `put_page` はページ全体を置き換える。編集前に同じ `source_id` と `include_content: true` で `get_page` し、既存内容を保持する。GBrain v0.46.28.0のAPI契約に合わせた引数のみ公開し、新しい書き込みツールを自動的に開放しない。

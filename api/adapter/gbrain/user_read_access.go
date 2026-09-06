@@ -40,6 +40,34 @@ func NewUserReadAccessService(baseURL string, admin output_port.GBrainReaderAdmi
 	}, nil
 }
 
+func (s *UserReadAccessService) Status(ctx context.Context, userID string) (*entity.ReadConnectionStatus, error) {
+	stored, err := s.repository.FindReaderClientByUser(ctx, userID)
+	if errors.Is(err, output_port.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &entity.ReadConnectionStatus{State: stored.State, StateReason: stored.StateReason}, nil
+}
+
+func (s *UserReadAccessService) ConnectedUsers(ctx context.Context) ([]string, error) {
+	clients, err := s.repository.ListReaderClients(ctx)
+	if err != nil {
+		return nil, err
+	}
+	users := make([]string, len(clients))
+	for i, client := range clients {
+		users[i] = client.UserID
+	}
+	return users, nil
+}
+
+func (s *UserReadAccessService) Prepare(ctx context.Context, userID string, sources []entity.SourceID) error {
+	_, err := s.AccessToken(ctx, userID, sources)
+	return err
+}
+
 func (s *UserReadAccessService) AccessToken(ctx context.Context, userID string, sources []entity.SourceID) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

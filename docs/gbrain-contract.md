@@ -36,11 +36,23 @@ OAuthは `read` / `read write` を受け付け、省略時は後者を要求範�
 
 `tools/list` は利用者別readerの一覧を維持し、write許可と現在編集できるreadyの脳がある場合だけ、`source_id` 必須の `put_page` を追加する。呼び出しでは現在のowner/editor権限を照合し、対象脳専用writerに切り替える。ルーティング後は `source_id` を除く。その他の操作にwriterを渡さず、Source作成・削除を有効にしない。OAuthのwrite許可とSourceの編集権限は独立し、どちらかがなければ書けない。
 
-#### `search` の source 境界（2026-08-23）
+#### Brainhub内部の通信境界
+
+HTTP handlerは要求を一度解析し、usecaseが現在の利用者・閲覧範囲・保存先を認可する。解析済み要求と秘密情報を含まない認可結果をサーバー内部contextで渡し、`adapter/gbrain/proxy.go` が接続選択、トークン取得、引数変換、Authorization差し替えを行う。認可情報の欠落や要求との不一致は転送しない。通常の応答は標準の `httputil.ReverseProxy` でストリーミングする。
+
+`SourceAccess` は接続準備・復旧、`UserReadAccess` は状態表示・起動時準備・復旧だけを上位へ公開する。画面へ渡す読み取り接続情報は状態と理由だけで、暗号化されたsecretやGBrain client IDを含めない。
+
+稼働中のv0.46.28.0を確認した結果、次の互換処理は残す。
+
+- 上流 `src/core/ops/pages.ts` の `put_page` は `source_id` を受け取らず、clientに固定されたSourceへ書く。Brainhubの明示的な保存先を照合してから、引数を除いて既存writerで転送する必要がある。
+- 上流 `src/commands/serve-http.ts` の `tools/list` は呼び出しtokenのscopeで一覧を絞るため、readerの一覧に `put_page` は含まれない。writerの一覧を別途取得すると、一覧表示のためにwriter準備と追加通信が必要になる。現在は小さい `put_page` 定義の追加を維持し、独自のスキーマ取得キャッシュは作らない。
+- 登録・範囲変更・失効は引き続きGBrainの既存Admin APIを使う。BrainhubにはMembershipとの対応付け、secretの暗号化保存、失敗時の復旧記録だけを残す。
+
+#### `search` の source 境界（2026-09-07更新）
 
 GBrain v0.46.28.0 の MCP `search` には `source_id` 引数がない。呼び出しごとに source を指定して絞ることはできず、検索対象は OAuth client の `federatedRead` grant で決まる。`gbrain-evals-amara-v1` の調査では、`federatedRead=["gbrain-evals-amara-v1"]` の専用 client を発行して source を限定した。
 
-brainhubの `/mcp` は `search` をHTTP 200のMCP tool errorとして拒否し、`query` を案内する。GBrainの `search` は `source_id` を受け取らずgrant全体を検索するため、別の結果フィルタで代替しない。
+brainhubの `/mcp` は `search` を利用者別readerで転送する。`source_id` は注入せず、現在の閲覧範囲へ更新した `federatedRead` grantで検索対象を制限する。範囲更新に失敗した場合は503で止め、以前の広いgrantで転送しない。以前の「searchを拒否する」という記述は古く、今回の整理前から転送する実装になっていた。
 
 ### OAuth 2.1
 

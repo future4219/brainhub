@@ -51,19 +51,23 @@ func (s *mcpHandlerUseCaseStub) AuthorizeCall(_ context.Context, token, tool str
 		return input_port.MCPCallAuthorization{}, s.error
 	}
 	if tool == "search" {
-		return input_port.MCPCallAuthorization{GBrainToken: "gbrain-reader-token"}, nil
+		return input_port.MCPCallAuthorization{UserID: "user-1", ToolName: tool, ReadableSources: []entity.SourceID{"brain-a"}}, nil
 	}
 	source := "brain-a"
-	return input_port.MCPCallAuthorization{GBrainToken: "gbrain-reader-token", SourceID: &source}, nil
+	return input_port.MCPCallAuthorization{UserID: "user-1", ToolName: tool, ReadableSources: []entity.SourceID{"brain-a"}, SourceID: &source}, nil
 }
 func (s *mcpHandlerUseCaseStub) ReissueReader(context.Context, string) error { return nil }
 func (s *mcpHandlerUseCaseStub) ReconcileReaders(context.Context) error      { return nil }
 
-func TestMCPHandlerInjectsSourceReplacesAuthorizationAndStreamsResponse(t *testing.T) {
+func TestMCPHandlerPassesAuthorizedRequestAndStreamsResponse(t *testing.T) {
 	useCase := &mcpHandlerUseCaseStub{}
 	proxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer gbrain-reader-token" {
+		if r.Header.Get("Authorization") != "Bearer brainhub-token" {
 			t.Errorf("upstream authorization = %q", r.Header.Get("Authorization"))
+		}
+		authorized, ok := input_port.MCPRequestFromContext(r.Context())
+		if !ok || authorized.Authorization.UserID != "user-1" || authorized.Authorization.ToolName != "get_page" || authorized.Request["method"] != "tools/call" {
+			t.Fatal("missing authorized request")
 		}
 		var body struct {
 			Params struct {

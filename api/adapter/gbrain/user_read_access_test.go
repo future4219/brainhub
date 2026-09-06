@@ -32,6 +32,7 @@ func (a *readerAdminStub) RevokeClient(context.Context, string) error { return n
 type readerClientRepositoryStub struct {
 	client      entity.ReaderClient
 	orphanCalls int
+	findErr     error
 }
 
 func (r *readerClientRepositoryStub) CreateReaderClient(_ context.Context, client entity.ReaderClient) error {
@@ -39,7 +40,7 @@ func (r *readerClientRepositoryStub) CreateReaderClient(_ context.Context, clien
 	return nil
 }
 func (r *readerClientRepositoryStub) FindReaderClientByUser(context.Context, string) (entity.ReaderClient, error) {
-	return r.client, nil
+	return r.client, r.findErr
 }
 func (r *readerClientRepositoryStub) ListReaderClients(context.Context) ([]entity.ReaderClient, error) {
 	return []entity.ReaderClient{r.client}, nil
@@ -137,5 +138,29 @@ func TestUserReadAccessServiceRefreshesTokenAfterSuccessfulRescope(t *testing.T)
 	token, err := service.AccessToken(context.Background(), "user-1", []entity.SourceID{"brain-a"})
 	if err != nil || token != "fresh-token" || tokenCalls != 1 {
 		t.Fatalf("token/calls/error = %q %d %v", token, tokenCalls, err)
+	}
+}
+
+func TestReadConnectionManagementDoesNotExposeCredentials(t *testing.T) {
+	repository := &readerClientRepositoryStub{client: entity.ReaderClient{
+		UserID: "user-1", State: entity.ReaderClientStateOrphan, StateReason: "reissue required",
+		ClientSecretCiphertext: []byte("must stay inside adapter"),
+	}}
+	service := &UserReadAccessService{repository: repository}
+	status, err := service.Status(context.Background(), "user-1")
+	if err != nil || status == nil || status.State != entity.ReaderClientStateOrphan || status.StateReason != "reissue required" {
+		t.Fatalf("status = %+v %v", status, err)
+	}
+	users, err := service.ConnectedUsers(context.Background())
+	if err != nil || len(users) != 1 || users[0] != "user-1" {
+		t.Fatalf("users = %v %v", users, err)
+	}
+	repository.findErr = output_port.ErrNotFound
+	if status, err := service.Status(context.Background(), "user-1"); err != nil || status != nil {
+		t.Fatalf("missing connection = %+v %v", status, err)
+	}
+	repository.findErr = errors.New("database unavailable")
+	if _, err := service.Status(context.Background(), "user-1"); err == nil {
+		t.Fatal("database failure must not look like an unconfigured connection")
 	}
 }
