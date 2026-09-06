@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ConnectionsPresenter } from "@/components/features/Connections/ConnectionsPresenter";
 import type { PublicConfig } from "@/entities/brain/entity";
 import type { CreatedMCPCLIToken, MCPConnection } from "@/entities/mcp/entity";
+import { useClipboard } from "@/hooks/useClipboard";
 import { useViewer } from "@/hooks/useViewer";
 import { getPublicConfig } from "@/lib/brainApi";
 import {
@@ -27,9 +28,7 @@ export function ConnectionsContainer() {
   const [readerReissuing, setReaderReissuing] = useState(false);
   const [readerStatus, setReaderStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [copyState, setCopyState] = useState<
-    Record<string, "copied" | "failed">
-  >({});
+  const { copyState, copy, resetCopyState } = useClipboard();
 
   useEffect(() => {
     document.title = "AIとの接続 — brainhub";
@@ -64,15 +63,6 @@ export function ConnectionsContainer() {
     };
   }, [shell.viewer]);
 
-  async function copy(key: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyState((current) => ({ ...current, [key]: "copied" }));
-    } catch {
-      setCopyState((current) => ({ ...current, [key]: "failed" }));
-    }
-  }
-
   async function refreshConnection() {
     setConnection(await getMCPConnection());
   }
@@ -97,11 +87,7 @@ export function ConnectionsContainer() {
       const issued = await issueMCPCLIToken(cliTokenLabel);
       setCreatedCLIToken(issued);
       setCLITokenLabel("");
-      setCopyState((current) => {
-        const next = { ...current };
-        delete next["cli-token"];
-        return next;
-      });
+      resetCopyState("cli-token");
       await refreshConnection();
     } catch {
       setCLITokenError(

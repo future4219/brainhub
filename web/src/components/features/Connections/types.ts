@@ -1,3 +1,4 @@
+import type { CopyState } from "@/hooks/useClipboard";
 import type { PublicConfig } from "@/entities/brain/entity";
 import type { CreatedMCPCLIToken, MCPConnection } from "@/entities/mcp/entity";
 import type { ViewerState } from "@/entities/user/entity";
@@ -15,7 +16,7 @@ export type ConnectSectionProps = {
   submitting: boolean;
   readerReissuing: boolean;
   readerStatus: string;
-  copyState: Record<string, "copied" | "failed">;
+  copyState: CopyState;
   onCopy: (key: string, value: string) => void;
   onIssue: (name: "claude-web" | "codex") => void;
   onCLITokenLabel: (label: string) => void;

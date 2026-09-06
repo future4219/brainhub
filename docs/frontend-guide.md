@@ -256,6 +256,11 @@ npm --prefix web run check
 npm --prefix web test
 ```
 
+純粋な関数のテストは対象の隣に `*.test.mjs` として置き、Node標準のテストランナーで実行する。URL以外の検証を `config/url.test.mjs` に集めない。
+
+ブラウザ回帰テストは `web/test/browser-regression.cjs`。起動中のWebに対して、接続設定・コピー成功/失敗・手動トークン・招待・OAuth・ページ閲覧を確認する。すべてのAPI呼び出しをテストデータで置き換えるため、実データや実トークンは変更しない。
+PlaywrightとChromiumが利用できるテスト環境で `npm --prefix web run test:browser` を実行する。外部にインストール済みのPlaywrightを使う場合は `PLAYWRIGHT_MODULE` にモジュールの絶対パスを指定できる。接続先は既定で `http://localhost:3000`、変更時は `BRAINHUB_TEST_URL` を指定する。
+
 - 型エラーがないこと
 - コンソールに警告が出ていないこと
 - 4 状態すべてを実際に表示して確認したこと

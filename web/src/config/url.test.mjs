@@ -8,75 +8,35 @@ import {
   markdownPageHref,
   pageUrl,
 } from "./url.ts";
-import {
-  createBrainFailure,
-  sourceIDCandidate,
-} from "../components/features/CreateBrain/createBrainForm.ts";
-import { codexConnectCommand, connectionSteps, formatDate, pageSignature } from "../lib/format.ts";
-import { safeNextPath } from "../lib/security.ts";
 
 assert.equal(brainTab("?tab=invites"), "invites");
-assert.equal(brainAddressPrefix("https://brainhub.example.com"), "brainhub.example.com/brains/");
-assert.equal(brainAddressPrefix("http://localhost:3000/app/"), "localhost:3000/app/brains/");
-assert.equal(sourceIDCandidate(" Product  Research "), "product-research");
-assert.equal(sourceIDCandidate("製品 調査"), "");
-assert.equal(sourceIDCandidate("A___B -- C"), "ab-c");
-assert.ok(sourceIDCandidate("a".repeat(40)).length <= 32);
-assert.deepEqual(
-  createBrainFailure({
-    status: 502,
-    message: "brain provisioning failed: shim unavailable",
-    data: { brain: { state: "failed" } },
-  }),
-  {
-    messages: [
-      "GBrain側で脳を作成できませんでした。",
-      "詳細: brain provisioning failed: shim unavailable",
-      "この脳は一覧に [failed] として残っています。一覧で状態理由を確認し、GBrainの接続を復旧してから管理者に再処理を依頼してください。",
-    ],
-    showBrainList: true,
-  },
+assert.equal(
+  brainAddressPrefix("https://brainhub.example.com"),
+  "brainhub.example.com/brains/",
+);
+assert.equal(
+  brainAddressPrefix("http://localhost:3000/app/"),
+  "localhost:3000/app/brains/",
 );
 assert.equal(brainTab("?connect=1"), "connect");
 assert.equal(brainUrl("brainhub", "connect"), "/settings/connections");
 assert.equal(invitationUrl("a/b"), "/invite/a%2Fb");
-assert.equal(pageUrl("brainhub", "decisions/a b"), "/brains/brainhub/pages/decisions/a%20b");
-assert.equal(markdownPageHref("eval", "people/tomoko-sato"), "/brains/eval/pages/people/tomoko-sato");
-assert.equal(markdownPageHref("eval", "people/tomoko-sato#bio"), "/brains/eval/pages/people/tomoko-sato#bio");
-assert.equal(markdownPageHref("eval", "https://example.test/person"), "https://example.test/person");
+assert.equal(
+  pageUrl("brainhub", "decisions/a b"),
+  "/brains/brainhub/pages/decisions/a%20b",
+);
+assert.equal(
+  markdownPageHref("eval", "people/tomoko-sato"),
+  "/brains/eval/pages/people/tomoko-sato",
+);
+assert.equal(
+  markdownPageHref("eval", "people/tomoko-sato#bio"),
+  "/brains/eval/pages/people/tomoko-sato#bio",
+);
+assert.equal(
+  markdownPageHref("eval", "https://example.test/person"),
+  "https://example.test/person",
+);
 assert.equal(markdownPageHref("eval", "#orange-mode"), "#orange-mode");
-assert.equal(safeNextPath("?next=%2Finvite%2Fabc", "/"), "/invite/abc");
-assert.equal(safeNextPath("?next=https%3A%2F%2Fevil.test", "/"), "/");
-assert.equal(pageSignature(["idea", "decision", "idea", "note", "research"]), "idea 2 · decision 1 · note 1 · +1");
-assert.equal(formatDate("2026-08-14T15:23:56.326Z"), "2026-08-14");
-assert.equal(connectionSteps("https://example.test/mcp", "client-id").length, 5);
-assert.match(connectionSteps("https://example.test/mcp", null)[1].code, /https:\/\/example\.test\/mcp/);
-
 assert.equal(brainTab("?tab=settings"), "settings");
 assert.equal(brainUrl("brainhub", "settings"), "/brains/brainhub?tab=settings");
-assert.equal(
-  codexConnectCommand("https://example.test/mcp", "client-id"),
-  "codex mcp add brainhub --url 'https://example.test/mcp' --oauth-client-id 'client-id'",
-);
-
-// Custom font sizes must not replace text colors on buttons and feedback.
-const { cn } = await import("../lib/utils.ts");
-for (const size of ["ui", "body", "section", "title"]) {
-  assert.equal(cn("text-canvas", `text-${size}`), `text-canvas text-${size}`);
-  assert.equal(
-    cn(`text-${size}`, "text-text-muted"),
-    `text-${size} text-text-muted`,
-  );
-  assert.equal(
-    cn("text-canvas", `text-${size}`, "text-sm"),
-    "text-canvas text-sm",
-  );
-}
-
-const consentNext = "/oauth/authorize?client_id=codex&state=a%2Bb&code_challenge=abc&redirect_uri=http%3A%2F%2F127.0.0.1%3A41197%2Fcallback%2Ftest";
-for (const next of [consentNext, "/settings/connections", "/brains/new", "/invite/a%2Fb"]) {
-  assert.equal(safeNextPath(`?next=${encodeURIComponent(next)}`, "/"), next);
-}
-for (const next of ["https://evil.test", "//evil.test", "/\\evil.test", "javascript:alert(1)", " /oauth/authorize", "/\n/evil.test", "/\t/evil.test", "/oauth/authorize\u007f"]) {
-  assert.equal(safeNextPath(`?next=${encodeURIComponent(next)}`, "/"), "/");
-}

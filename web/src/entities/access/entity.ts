@@ -21,17 +21,3 @@ export type AcceptedInvitation = {
   brain_name: string;
   role: Role;
 };
-
-export type IssuedClient = {
-  id: string;
-  client_id: string | null;
-  label: string;
-  write_source_id: string | null;
-  read_source_ids: string[];
-  scopes: string[];
-  state: "issuing" | "active" | "revoked" | "orphan";
-  state_reason: string;
-  issued_at: string;
-  last_verified_at: string | null;
-  revoked_at: string | null;
-};

@@ -11,6 +11,7 @@ import type {
 import { brainTab, invitationUrl } from "@/config/url";
 import type { Invitation, Role } from "@/entities/access/entity";
 import type { Brain, Page } from "@/entities/brain/entity";
+import { useClipboard } from "@/hooks/useClipboard";
 import { useViewer } from "@/hooks/useViewer";
 import {
   createInvitation,
@@ -18,11 +19,7 @@ import {
   revokeInvitation,
 } from "@/lib/accessApi";
 import { APIError } from "@/lib/api";
-import {
-  getBrain,
-  listPages,
-  reissueWriter,
-} from "@/lib/brainApi";
+import { getBrain, listPages, reissueWriter } from "@/lib/brainApi";
 
 export function BrainDetailContainer() {
   const location = useLocation();
@@ -42,9 +39,7 @@ export function BrainDetailContainer() {
   const [submitting, setSubmitting] = useState(false);
   const [writerReissuing, setWriterReissuing] = useState(false);
   const [writerStatus, setWriterStatus] = useState("");
-  const [copyState, setCopyState] = useState<
-    Record<string, "copied" | "failed">
-  >({});
+  const { copyState, copy } = useClipboard();
   const [selectedType, setSelectedType] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<PageSort>("updated");
@@ -135,15 +130,6 @@ export function BrainDetailContainer() {
           : b.updated_at.localeCompare(a.updated_at),
       );
   }, [pages, query, selectedType, sort]);
-
-  async function copy(key: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyState((current) => ({ ...current, [key]: "copied" }));
-    } catch {
-      setCopyState((current) => ({ ...current, [key]: "failed" }));
-    }
-  }
 
   async function reissueBrainWriter() {
     setWriterReissuing(true);

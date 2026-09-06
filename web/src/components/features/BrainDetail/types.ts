@@ -1,10 +1,10 @@
+import type { CopyState } from "@/hooks/useClipboard";
 import type { BrainTab } from "@/config/url";
 import type { Invitation, Role } from "@/entities/access/entity";
 import type { Brain, Page } from "@/entities/brain/entity";
 import type { ViewerState } from "@/entities/user/entity";
 
 export type PageSort = "updated" | "slug";
-export type CopyState = Record<string, "copied" | "failed">;
 
 export type BrainDetailState = {
   sourceID: string;
